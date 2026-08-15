@@ -5,7 +5,11 @@
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # 构建期 Go 模块代理，国内构建机在 .env 里设 GOPROXY=https://goproxy.cn,direct
+        GOPROXY: "${GOPROXY:-}"
     image: fenghuo:latest
     container_name: fenghuo-app
     restart: unless-stopped
