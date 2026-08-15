@@ -1,0 +1,174 @@
+// Package config 从环境变量（前缀 FAF_）、可选的 config.yaml 以及内置默认值
+// 加载应用配置
+// 优先级：环境变量 > config.yaml > 默认值
+package config
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+// Config 是应用的根配置
+type Config struct {
+	Server   ServerConfig
+	Database DatabaseConfig
+	// SecretKey 是用于敏感字段加密的 AES-256-GCM 密钥（必须恰好 32 字节）
+	SecretKey string
+	JWT       JWTConfig
+	Admin     AdminConfig
+	Log       LogConfig
+	Alert     AlertConfig
+	Channel   ChannelConfig
+	OAuth     OAuthConfig
+
+	// JWTSecretGenerated 为 true 表示 jwt.secret 为空，启动时生成了随机
+	// 密钥（重启后所有 token 失效）
+	JWTSecretGenerated bool
+}
+
+type ServerConfig struct {
+	HTTPAddr string
+	RootURL  string
+}
+
+type DatabaseConfig struct {
+	DSN string
+}
+
+type JWTConfig struct {
+	Secret     string
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
+}
+
+type AdminConfig struct {
+	User     string
+	Password string
+}
+
+type LogConfig struct {
+	Level string
+}
+
+type AlertConfig struct {
+	DedupWindow   time.Duration
+	RetentionDays int
+}
+
+type ChannelConfig struct {
+	HTTPTimeout time.Duration
+	RetryMax    int
+}
+
+type OAuthConfig struct {
+	Enabled         bool
+	FeishuAppID     string
+	FeishuAppSecret string
+	AutoCreateUser  bool
+	AllowedEmails   []string
+}
+
+// Load 按优先级读取配置：环境变量 > config.yaml > 默认值
+func Load() (*Config, error) {
+	v := viper.New()
+	v.SetEnvPrefix("FAF")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// 默认值依据 REQUIREMENTS §4.7
+	v.SetDefault("server.http_addr", ":8080")
+	v.SetDefault("server.root_url", "http://localhost:8080/")
+	v.SetDefault("log.level", "info")
+	v.SetDefault("alert.dedup_window", 5*time.Minute)
+	v.SetDefault("alert.retention_days", 30)
+	v.SetDefault("channel.http_timeout", 10*time.Second)
+	v.SetDefault("channel.retry_max", 2)
+	v.SetDefault("jwt.access_ttl", 2*time.Hour)
+	v.SetDefault("jwt.refresh_ttl", 7*24*time.Hour)
+
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.AddConfigPath(".")
+	v.AddConfigPath("./config")
+	if err := v.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
+			return nil, fmt.Errorf("read config file: %w", err)
+		}
+	}
+
+	cfg := &Config{
+		Server: ServerConfig{
+			HTTPAddr: v.GetString("server.http_addr"),
+			RootURL:  v.GetString("server.root_url"),
+		},
+		Database: DatabaseConfig{
+			DSN: v.GetString("database.dsn"),
+		},
+		SecretKey: v.GetString("secret_key"),
+		JWT: JWTConfig{
+			Secret:     v.GetString("jwt.secret"),
+			AccessTTL:  v.GetDuration("jwt.access_ttl"),
+			RefreshTTL: v.GetDuration("jwt.refresh_ttl"),
+		},
+		Admin: AdminConfig{
+			User:     v.GetString("admin.user"),
+			Password: v.GetString("admin.password"),
+		},
+		Log: LogConfig{Level: v.GetString("log.level")},
+		Alert: AlertConfig{
+			DedupWindow:   v.GetDuration("alert.dedup_window"),
+			RetentionDays: v.GetInt("alert.retention_days"),
+		},
+		Channel: ChannelConfig{
+			HTTPTimeout: v.GetDuration("channel.http_timeout"),
+			RetryMax:    v.GetInt("channel.retry_max"),
+		},
+		OAuth: OAuthConfig{
+			Enabled:         v.GetBool("oauth.enabled"),
+			FeishuAppID:     v.GetString("oauth.feishu_app_id"),
+			FeishuAppSecret: v.GetString("oauth.feishu_app_secret"),
+			AutoCreateUser:  v.GetBool("oauth.auto_create_user"),
+			AllowedEmails:   v.GetStringSlice("oauth.allowed_emails"),
+		},
+	}
+
+	if cfg.SecretKey == "" {
+		return nil, errors.New("FAF_SECRET_KEY is required (32 bytes, used to encrypt sensitive fields)")
+	}
+	if n := len([]byte(cfg.SecretKey)); n != 32 {
+		return nil, fmt.Errorf("FAF_SECRET_KEY must be exactly 32 bytes, got %d", n)
+	}
+	if cfg.Database.DSN == "" {
+		return nil, errors.New("FAF_DATABASE_DSN is required")
+	}
+	if cfg.JWT.Secret == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return nil, fmt.Errorf("generate random jwt secret: %w", err)
+		}
+		cfg.JWT.Secret = hex.EncodeToString(b)
+		cfg.JWTSecretGenerated = true
+	}
+	if cfg.OAuth.Enabled && (cfg.OAuth.FeishuAppID == "" || cfg.OAuth.FeishuAppSecret == "") {
+		return nil, errors.New("FAF_OAUTH_ENABLED=true requires FAF_OAUTH_FEISHU_APP_ID and FAF_OAUTH_FEISHU_APP_SECRET")
+	}
+	return cfg, nil
+}
+
+// BasePath 从 server.root_url 中提取 URL 路径前缀，用于子路径部署（FR-6）：
+// "https://example.com/freealertflow/" -> "/freealertflow"，"http://localhost:8080/" -> ""
+func (c *Config) BasePath() string {
+	u, err := url.Parse(c.Server.RootURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(u.Path, "/")
+}

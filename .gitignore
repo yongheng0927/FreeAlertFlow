@@ -11,8 +11,12 @@
 
 # Frontend (M3)
 node_modules/
-web/dist/
+web/dist/*
+!web/dist/index.html
 
 # Local config & secrets（连接信息等不要入库）
 config.yaml
 .env
+
+# 本地临时工具与冒烟测试产物
+.tools/

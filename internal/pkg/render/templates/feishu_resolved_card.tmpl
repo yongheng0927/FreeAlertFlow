@@ -1,0 +1,21 @@
+{
+  "msg_type": "interactive",
+  "card": {
+    "header": {
+      "template": "green",
+      "title": {"tag": "plain_text", "content": "✅ [RESOLVED] {{ label .CommonLabels "alertname" | jesc }}"}
+    },
+    "elements": [
+      {"tag": "div", "fields": [
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**级别**\n{{ label .CommonLabels "severity" | jesc }}"}},
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**来源**\n{{ jesc .SourceName }}"}},
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**告警条数**\n{{ len .Alerts }}"}}
+      ]},
+      {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
+      {"tag": "div", "text": {"tag": "lark_md", "content": "**实例** {{ label $a.Labels "instance" | jesc }}\n**开始时间** {{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n**恢复时间** {{ timeFormat "2006-01-02 15:04:05" $a.EndsAt }}"}}
+      {{ end }},
+      {"tag": "hr"},
+      {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "查看告警详情"}, "url": "{{ jesc .DetailURL }}", "type": "primary"}]}
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+dist/*
+# keep the placeholder page tracked so a clean checkout can `go build`
+# (go:embed requires dist/ to be non-empty); real vite output overwrites it
+!dist/index.html
+dist-ssr
+*.local
+.npm-cache
+tsconfig.tsbuildinfo
