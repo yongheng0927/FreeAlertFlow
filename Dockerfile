@@ -10,10 +10,6 @@ RUN npm run build
 
 # 阶段 2：构建后端（web/dist 来自阶段 1 的真实产物）
 FROM golang:1.25-alpine AS server
-# 构建期 Go 模块代理：默认空（走官方 proxy.golang.org），国内构建可传
-# --build-arg GOPROXY=https://goproxy.cn,direct（compose 里从 .env 读取）
-ARG GOPROXY
-ENV GOPROXY=${GOPROXY}
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
