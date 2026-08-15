@@ -71,6 +71,7 @@ func TestServeSPAUndefBasePath(t *testing.T) {
 		wantCode int
 		wantBody string
 	}{
+		{"/freealertflow", 301, "/freealertflow/"},            // 裸 base 重定向加尾斜杠
 		{"/freealertflow/", 200, "spa"},
 		{"/freealertflow/dashboard", 200, "spa"},          // SPA 兜底
 		{"/freealertflow/favicon.ico", 200, "ico"},        // 真实文件透传

@@ -57,7 +57,18 @@ func (h *StaticHandler) ServeAsset(c *gin.Context) {
 // 路径一律返回 SPA 的 index.html base path 下的 API/探针路径仍返回 JSON 404
 func (h *StaticHandler) ServeSPA(c *gin.Context) {
 	p := c.Request.URL.Path
-	if h.base != "" && !strings.HasPrefix(p, h.base+"/") && p != h.base {
+	// 裸 base path（无尾斜杠）重定向到带尾斜杠的形式：index.html 里的
+	// 资源是相对路径 ./assets/*，页面停在 /base 时浏览器会把它解析到
+	// base 之外（/assets/*），必须让页面落在 /base/ 上相对路径才正确
+	if h.base != "" && p == h.base {
+		target := h.base + "/"
+		if q := c.Request.URL.RawQuery; q != "" {
+			target += "?" + q
+		}
+		c.Redirect(http.StatusMovedPermanently, target)
+		return
+	}
+	if h.base != "" && !strings.HasPrefix(p, h.base+"/") {
 		fail(c, http.StatusNotFound, "not found")
 		return
 	}
