@@ -38,7 +38,7 @@ func run() error {
 	setupLogger(cfg.Log.Level)
 
 	if cfg.JWTSecretGenerated {
-		slog.Warn("FAF_JWT_SECRET not set, generated a random secret; " +
+		slog.Warn("FENGHUO_JWT_SECRET not set, generated a random secret; " +
 			"all tokens become invalid after restart")
 	}
 
@@ -104,7 +104,7 @@ func run() error {
 		slog.Info("serving under root url sub-path", "base", base)
 	}
 
-	// 首次启动初始化时：当数据库为空且配置了 FAF_ADMIN_USER/FAF_ADMIN_PASSWORD  创建初始管理员（FR-5.1）
+	// 首次启动初始化时：当数据库为空且配置了 FENGHUO_ADMIN_USER/FENGHUO_ADMIN_PASSWORD  创建初始管理员（FR-5.1）
 	created, err := authSvc.BootstrapAdmin(context.Background(), cfg.Admin.User, cfg.Admin.Password)
 	if err != nil {
 		return err

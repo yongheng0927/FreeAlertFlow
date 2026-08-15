@@ -15,7 +15,7 @@ import (
 )
 
 // StaticHandler 提供内嵌 SPA（web/dist）的静态服务，并注入 runtime 配置
-// （FR-6.2）：index.html 会被插入 window.__FAF_CONFIG__ 脚本标签，前端因此
+// （FR-6.2）：index.html 会被插入 window.__FENGHUO_CONFIG__ 脚本标签，前端因此
 // 无需针对不同 Root URL 重新构建
 type StaticHandler struct {
 	dist       fs.FS
@@ -40,7 +40,7 @@ func NewStaticHandler(cfg *config.Config, dist fs.FS) (*StaticHandler, error) {
 	if err != nil {
 		return nil, err
 	}
-	injection := []byte(`<script>window.__FAF_CONFIG__ = ` + string(cfgJSON) + `</script>`)
+	injection := []byte(`<script>window.__FENGHUO_CONFIG__ = ` + string(cfgJSON) + `</script>`)
 	index := bytes.Replace(raw, []byte("</head>"), append(injection, []byte("</head>")...), 1)
 	if !bytes.Contains(index, injection) {
 		index = append(injection, raw...) // 没有 </head> 时改为插到开头

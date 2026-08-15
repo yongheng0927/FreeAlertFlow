@@ -3,7 +3,7 @@
 > 数据库：**PostgreSQL 18**（最低兼容 16）。PG 建库即 UTF-8，无字符集/排序规则声明负担
 > 所有表统一包含：`id`（`BIGINT GENERATED ALWAYS AS IDENTITY` 主键）、`created_at`、`updated_at`（`TIMESTAMPTZ`，微秒精度），下文不再重复列出
 > 布尔语义统一使用原生 `BOOLEAN`，不用 TINYINT 模拟；枚举语义词（role/type/status/disposition）统一 `VARCHAR`，不用 PG ENUM（见 §11）
-> 删除策略：**全部硬删除（真实 DELETE）**。管理类表删除前由应用层校验引用关系：模板被渠道引用、渠道被路由规则引用、接入源下存在规则或告警时均拒绝删除；告警与投递记录按保留策略（`FAF_ALERT_RETENTION_DAYS`，默认 30 天）定时物理清理
+> 删除策略：**全部硬删除（真实 DELETE）**。管理类表删除前由应用层校验引用关系：模板被渠道引用、渠道被路由规则引用、接入源下存在规则或告警时均拒绝删除；告警与投递记录按保留策略（`FENGHUO_ALERT_RETENTION_DAYS`，默认 30 天）定时物理清理
 
 ---
 
@@ -152,7 +152,7 @@
 - 一次 webhook 的 `alerts[]` 拆成多行存储，`raw_payload` 每行冗余整组原文——存储换简单，模板预览随便取一条就能用
 - `alertname`/`severity` 冗余是反范式索引优化：V1 列表页的固定过滤条件走普通 btree；如需按任意 label 做 ad-hoc 过滤（如 `labels @> '{"pod":"xxx"}'`），后续加 `GIN (labels jsonb_path_ops)` 即可，无需改表
 - 去重实现：按 `(fingerprint, status)` 索引取窗口内最近一条，比对 `content_hash`，相同则新行标记 `disposition='deduped'`、不产生 deliveries；无需额外状态字段
-- 数据清理：按保留天数（`FAF_ALERT_RETENTION_DAYS`，默认 30 天）定时物理删除，deliveries 级联清理。流水表持续增长时可用 PG 声明式分区（按 received_at 月分区，`DROP PARTITION` 即完成清理，比 DELETE 快且无 vacuum 压力）——V1 数据量下非必需，列为演进选项
+- 数据清理：按保留天数（`FENGHUO_ALERT_RETENTION_DAYS`，默认 30 天）定时物理删除，deliveries 级联清理。流水表持续增长时可用 PG 声明式分区（按 received_at 月分区，`DROP PARTITION` 即完成清理，比 DELETE 快且无 vacuum 压力）——V1 数据量下非必需，列为演进选项
 
 ## 9. deliveries — 投递记录
 

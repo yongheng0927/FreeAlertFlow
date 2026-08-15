@@ -19,11 +19,11 @@ cp docker-compose.example.yaml docker-compose.yaml   # 按需修改密钥等配�
 docker compose up -d --build
 ```
 
-访问 http://localhost:8080 ，使用 compose 中 `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD` 配置的初始管理员登录。
+访问 http://localhost:8080 ，使用 compose 中 `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD` 配置的初始管理员登录。
 
 ## 配置
 
-全部配置项见 [config.example.yaml](config.example.yaml)，支持环境变量（`FAF_` 前缀）与 `config.yaml` 两种方式，优先级：环境变量 > config.yaml > 默认值。
+全部配置项见 [config.example.yaml](config.example.yaml)，支持环境变量（`FENGHUO_` 前缀）与 `config.yaml` 两种方式，优先级：环境变量 > config.yaml > 默认值。
 
 ## 文档
 

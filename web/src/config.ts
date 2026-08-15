@@ -1,7 +1,7 @@
-// 由后端（M4）以 window.__FAF_CONFIG__ 形式注入的运行时配置
+// 由后端（M4）以 window.__FENGHUO_CONFIG__ 形式注入的运行时配置
 // 当注入不存在时（开发服务器，或尚未注入配置的后端）回退到合理默认值
-export interface FafRuntimeConfig {
-  /** FAF 服务器的公网根 URL，例如 https://alert.example.com */
+export interface FenghuoRuntimeConfig {
+  /** Fenghuo 服务器的公网根 URL，例如 https://alert.example.com */
   rootUrl?: string
   /** 是否启用飞书 OAuth 登录（M4） */
   oauthEnabled?: boolean
@@ -11,12 +11,12 @@ export interface FafRuntimeConfig {
 
 declare global {
   interface Window {
-    __FAF_CONFIG__?: FafRuntimeConfig
+    __FENGHUO_CONFIG__?: FenghuoRuntimeConfig
   }
 }
 
-const injected: FafRuntimeConfig =
-  typeof window !== 'undefined' && window.__FAF_CONFIG__ ? window.__FAF_CONFIG__ : {}
+const injected: FenghuoRuntimeConfig =
+  typeof window !== 'undefined' && window.__FENGHUO_CONFIG__ ? window.__FENGHUO_CONFIG__ : {}
 
 function normalizeBase(base: string | undefined): string {
   if (!base || base === '/') return '/'

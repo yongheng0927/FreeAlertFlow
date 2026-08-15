@@ -1,4 +1,4 @@
-// Package config 从环境变量（前缀 FAF_）、可选的 config.yaml 以及内置默认值
+// Package config 从环境变量（前缀 FENGHUO_）、可选的 config.yaml 以及内置默认值
 // 加载应用配置
 // 优先级：环境变量 > config.yaml > 默认值
 package config
@@ -95,7 +95,7 @@ type OAuthConfig struct {
 // Load 按优先级读取配置：环境变量 > config.yaml > 默认值
 func Load() (*Config, error) {
 	v := viper.New()
-	v.SetEnvPrefix("FAF")
+	v.SetEnvPrefix("FENGHUO")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
@@ -166,13 +166,13 @@ func Load() (*Config, error) {
 	}
 
 	if cfg.SecretKey == "" {
-		return nil, errors.New("FAF_SECRET_KEY is required (32 bytes, used to encrypt sensitive fields)")
+		return nil, errors.New("FENGHUO_SECRET_KEY is required (32 bytes, used to encrypt sensitive fields)")
 	}
 	if n := len([]byte(cfg.SecretKey)); n != 32 {
-		return nil, fmt.Errorf("FAF_SECRET_KEY must be exactly 32 bytes, got %d", n)
+		return nil, fmt.Errorf("FENGHUO_SECRET_KEY must be exactly 32 bytes, got %d", n)
 	}
 	if cfg.Database.User == "" || cfg.Database.DBName == "" {
-		return nil, errors.New("database config incomplete: FAF_DATABASE_USER and FAF_DATABASE_DBNAME are required")
+		return nil, errors.New("database config incomplete: FENGHUO_DATABASE_USER and FENGHUO_DATABASE_DBNAME are required")
 	}
 	if cfg.JWT.Secret == "" {
 		b := make([]byte, 32)
@@ -183,7 +183,7 @@ func Load() (*Config, error) {
 		cfg.JWTSecretGenerated = true
 	}
 	if cfg.OAuth.Enabled && (cfg.OAuth.FeishuAppID == "" || cfg.OAuth.FeishuAppSecret == "") {
-		return nil, errors.New("FAF_OAUTH_ENABLED=true requires FAF_OAUTH_FEISHU_APP_ID and FAF_OAUTH_FEISHU_APP_SECRET")
+		return nil, errors.New("FENGHUO_OAUTH_ENABLED=true requires FENGHUO_OAUTH_FEISHU_APP_ID and FENGHUO_OAUTH_FEISHU_APP_SECRET")
 	}
 	return cfg, nil
 }

@@ -81,7 +81,7 @@ POST /api/v1/alerts/webhook/:token
 
 - [x] **FR-1.2** 告警字段解析：提取 `status`（firing/resolved）、`labels`、`annotations`、`startsAt`、`endsAt`、`fingerprint`，结构化入库。
 
-- [x] **FR-1.3** 幂等与去重：同一 `fingerprint + status` 且内容未变化的告警在去重窗口内重复推送时，仅记录不重复发送（窗口由 `FAF_ALERT_DEDUP_WINDOW` 配置，默认 5 分钟）。
+- [x] **FR-1.3** 幂等与去重：同一 `fingerprint + status` 且内容未变化的告警在去重窗口内重复推送时，仅记录不重复发送（窗口由 `FENGHUO_ALERT_DEDUP_WINDOW` 配置，默认 5 分钟）。
 
 - 「内容未变化」以对 `status + labels + annotations`（key 排序后）计算 SHA-256 得到的 `content_hash` 判定，入库时一并存储，避免每次比对完整 JSON。
 - 被去重的告警正常入库但 `disposition` 标记为 `deduped`，不产生投递记录；未命中任何路由规则的标记为 `unmatched`。告警列表可据此区分「没发出去」的原因。
@@ -107,7 +107,7 @@ POST /api/v1/alerts/webhook/:token
   - `stringToSign = timestamp + "\n" + secret`
   - `sign = Base64(HMAC-SHA256(key = stringToSign, data = ""))`（即以 `timestamp + "\n" + secret` 为 HMAC 密钥、空串为消息体）
 - 请求体携带 `timestamp` 与 `sign` 字段。
-- 签名密钥与 Webhook URL 在数据库中**均加密存储**（AES-GCM，密钥由环境变量 `FAF_SECRET_KEY` 提供）：Webhook URL 内含机器人 token，泄露即等于任何人可向群内发消息，敏感度与 Secret 同级，故同等对待。接口返回值均脱敏（仅显示尾部 4 位）。
+- 签名密钥与 Webhook URL 在数据库中**均加密存储**（AES-GCM，密钥由环境变量 `FENGHUO_SECRET_KEY` 提供）：Webhook URL 内含机器人 token，泄露即等于任何人可向群内发消息，敏感度与 Secret 同级，故同等对待。接口返回值均脱敏（仅显示尾部 4 位）。
 
 - [x] **FR-2.3 消息模板封装（V1 核心亮点）**：
 
@@ -124,8 +124,8 @@ POST /api/v1/alerts/webhook/:token
 
 - **职责边界：告警生命周期管理（分组、抑制、静默、告警级重发）是 Alertmanager 的职责，本项目只做「通知编排 + 渠道发送」**。
 - 收到 webhook 后按路由规则分发到渠道，**即时发送**：HTTP 请求级超时（默认 10s）。
-- **有限重试**：投递失败时，仅对瞬时错误（网络错误、超时、HTTP 5xx、IM 平台限频）在投递 goroutine 内原地重试，默认最多重试 2 次（退避 1s、3s，总耗时有界）；次数由 `FAF_CHANNEL_RETRY_MAX` 配置，`0` 表示关闭。**明确失败的业务错误（签名错误、关键词缺失、机器人被移除等）不重试**——重试不会成功，交给人工排查。
-- 注意：Alertmanager 的 webhook 重发只在 FAF 返回非 2xx 时触发，而 FAF 接收后即返回 200，因此 **IM 投递失败没有外部兜底**——本地有限重试 + editor/admin 手动重发（FR-2.6）是仅有的两层保险。
+- **有限重试**：投递失败时，仅对瞬时错误（网络错误、超时、HTTP 5xx、IM 平台限频）在投递 goroutine 内原地重试，默认最多重试 2 次（退避 1s、3s，总耗时有界）；次数由 `FENGHUO_CHANNEL_RETRY_MAX` 配置，`0` 表示关闭。**明确失败的业务错误（签名错误、关键词缺失、机器人被移除等）不重试**——重试不会成功，交给人工排查。
+- 注意：Alertmanager 的 webhook 重发只在 Fenghuo 返回非 2xx 时触发，而 Fenghuo 接收后即返回 200，因此 **IM 投递失败没有外部兜底**——本地有限重试 + editor/admin 手动重发（FR-2.6）是仅有的两层保险。
 - 投递结果（成功/失败、尝试次数、飞书返回码与错误信息、耗时）完整记录到 `deliveries` 表，供页面排查；不做后台重试队列、不做状态机。
 - 飞书侧明确报错（如签名错误、关键词缺失、机器人被移除）时，投递记录中给出人类可读的失败原因提示。
 
@@ -152,7 +152,7 @@ POST /api/v1/alerts/webhook/:token
 
 ### 4.5 认证与用户
 
-- [x] **FR-5.1** 本地账号登录：用户名 + 密码（bcrypt），首次启动若无用户则引导创建管理员（或环境变量预置 `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD`）。
+- [x] **FR-5.1** 本地账号登录：用户名 + 密码（bcrypt），首次启动若无用户则引导创建管理员（或环境变量预置 `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD`）。
 
 - [x] **FR-5.2 JWT 认证**：
 
@@ -167,16 +167,16 @@ POST /api/v1/alerts/webhook/:token
 - 需要用户在飞书开放平台创建「企业自建应用」，配置重定向 URL。
 - 配置项（环境变量）：
   ```
-  FAF_OAUTH_ENABLED=true
-  FAF_OAUTH_FEISHU_APP_ID=cli_xxx
-  FAF_OAUTH_FEISHU_APP_SECRET=xxx
-  FAF_OAUTH_AUTO_CREATE_USER=true        # 首次登录自动创建本地账号
-  FAF_OAUTH_ALLOWED_EMAILS=a@x.com,b@x.com   # 可选白名单，空则不限制
+  FENGHUO_OAUTH_ENABLED=true
+  FENGHUO_OAUTH_FEISHU_APP_ID=cli_xxx
+  FENGHUO_OAUTH_FEISHU_APP_SECRET=xxx
+  FENGHUO_OAUTH_AUTO_CREATE_USER=true        # 首次登录自动创建本地账号
+  FENGHUO_OAUTH_ALLOWED_EMAILS=a@x.com,b@x.com   # 可选白名单，空则不限制
   ```
 - 授权流程：前端跳转飞书授权页 → 回调拿 `code` → 后端用 `app_access_token` 换 `user_access_token` → 拉取用户信息（open_id、姓名、邮箱、头像）。
 - 回调地址基于 Root URL 自动拼接：`{ROOT_URL}/api/auth/oauth/feishu/callback`，需在飞书应用后台配置一致。
 - 首次 OAuth 登录自动创建本地用户并绑定 `open_id`（默认 viewer 角色，admin 可在用户管理中提升）。
-- `FAF_OAUTH_AUTO_CREATE_USER=false` 时仅允许已绑定 `open_id` 的已有用户登录，其余拒绝。
+- `FENGHUO_OAUTH_AUTO_CREATE_USER=false` 时仅允许已绑定 `open_id` 的已有用户登录，其余拒绝。
 - 用户表存储飞书头像 URL 与姓名，展示在界面右上角。
 
 - [x] **FR-5.4 角色**：三级角色（对齐 Grafana 的 Viewer/Editor/Admin 语义）：
@@ -196,35 +196,35 @@ POST /api/v1/alerts/webhook/:token
 - [x] **FR-6.1** 环境变量：
 
 ```
-FAF_SERVER_ROOT_URL=https://alerts.example.com/        # 完整外部访问地址
-FAF_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
+FENGHUO_SERVER_ROOT_URL=https://alerts.example.com/        # 完整外部访问地址
+FENGHUO_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 ```
 
 - [x] **FR-6.2** 行为要求（对齐 Grafana `GF_SERVER_ROOT_URL` 语义）：
 
 - 系统内生成的所有绝对链接（OAuth 回调、告警详情跳转、邮件/卡片中的链接）均基于 Root URL 拼接。
-- 支持子路径部署，如 `FAF_SERVER_ROOT_URL=https://example.com/freealertflow/`，前端路由与 API 均带该前缀正常工作。
-- 前端构建产物通过后端注入 runtime 配置（`window.__FAF_CONFIG__`），避免前端为不同 Root URL 重新构建。
+- 支持子路径部署，如 `FENGHUO_SERVER_ROOT_URL=https://example.com/freealertflow/`，前端路由与 API 均带该前缀正常工作。
+- 前端构建产物通过后端注入 runtime 配置（`window.__FENGHUO_CONFIG__`），避免前端为不同 Root URL 重新构建。
 
 ### 4.7 系统配置总览（环境变量）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `FAF_SERVER_HTTP_ADDR` | `:8080` | 监听地址 |
-| `FAF_SERVER_ROOT_URL` | `http://localhost:8080/` | 外部访问根地址 |
-| `FAF_DATABASE_HOST` / `FAF_DATABASE_PORT` | `localhost` / `5432` | PostgreSQL 地址 |
-| `FAF_DATABASE_USER` / `FAF_DATABASE_PASSWORD` / `FAF_DATABASE_DBNAME` | — | PostgreSQL 账号、密码、库名（user/dbname 必填） |
-| `FAF_DATABASE_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
-| `FAF_SECRET_KEY` | — | 敏感字段加密密钥（32 字节，必填，否则启动失败） |
-| `FAF_JWT_SECRET` | 随机生成（启动警告） | JWT 签名密钥 |
-| `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD` | — | 初始管理员 |
-| `FAF_OAUTH_*` | — | OAuth2 配置，见 4.5 |
-| `FAF_LOG_LEVEL` | `info` | 日志级别 |
-| `FAF_ALERT_DEDUP_WINDOW` | `5m` | 告警去重窗口（FR-1.3），`0` 表示关闭去重 |
-| `FAF_ALERT_RETENTION_DAYS` | `30` | 告警与投递记录保留天数，到期物理清理 |
-| `FAF_CHANNEL_HTTP_TIMEOUT` | `10s` | 渠道发送的 HTTP 请求超时（FR-2.4） |
-| `FAF_CHANNEL_RETRY_MAX` | `2` | 投递失败后的重试次数（仅瞬时错误，退避 1s/3s，FR-2.4），`0` 表示关闭 |
-| `FAF_JWT_ACCESS_TTL` / `FAF_JWT_REFRESH_TTL` | `2h` / `7d` | JWT 有效期 |
+| `FENGHUO_SERVER_HTTP_ADDR` | `:8080` | 监听地址 |
+| `FENGHUO_SERVER_ROOT_URL` | `http://localhost:8080/` | 外部访问根地址 |
+| `FENGHUO_DATABASE_HOST` / `FENGHUO_DATABASE_PORT` | `localhost` / `5432` | PostgreSQL 地址 |
+| `FENGHUO_DATABASE_USER` / `FENGHUO_DATABASE_PASSWORD` / `FENGHUO_DATABASE_DBNAME` | — | PostgreSQL 账号、密码、库名（user/dbname 必填） |
+| `FENGHUO_DATABASE_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
+| `FENGHUO_SECRET_KEY` | — | 敏感字段加密密钥（32 字节，必填，否则启动失败） |
+| `FENGHUO_JWT_SECRET` | 随机生成（启动警告） | JWT 签名密钥 |
+| `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD` | — | 初始管理员 |
+| `FENGHUO_OAUTH_*` | — | OAuth2 配置，见 4.5 |
+| `FENGHUO_LOG_LEVEL` | `info` | 日志级别 |
+| `FENGHUO_ALERT_DEDUP_WINDOW` | `5m` | 告警去重窗口（FR-1.3），`0` 表示关闭去重 |
+| `FENGHUO_ALERT_RETENTION_DAYS` | `30` | 告警与投递记录保留天数，到期物理清理 |
+| `FENGHUO_CHANNEL_HTTP_TIMEOUT` | `10s` | 渠道发送的 HTTP 请求超时（FR-2.4） |
+| `FENGHUO_CHANNEL_RETRY_MAX` | `2` | 投递失败后的重试次数（仅瞬时错误，退避 1s/3s，FR-2.4），`0` 表示关闭 |
+| `FENGHUO_JWT_ACCESS_TTL` / `FENGHUO_JWT_REFRESH_TTL` | `2h` / `7d` | JWT 有效期 |
 
 配置优先级：环境变量 > 配置文件（可选 `config.yaml`）> 默认值。
 
@@ -242,7 +242,7 @@ FAF_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 
 **NFR-2 性能**
 
-- 告警接收接口 P99 < 200ms：接收 → 解析 → 入库后立即返回 200，路由分发与渠道发送在后台 goroutine 中即时执行（带超时、有限重试，见 FR-2.4）。进程重启导致的在途丢失由 Alertmanager 的 webhook 重发机制兜底（仅限 FAF 未返回 200 的场景；已返回 200 后的 IM 投递失败由有限重试与手动重发兜底）。接入源绑定多渠道时并行发送。
+- 告警接收接口 P99 < 200ms：接收 → 解析 → 入库后立即返回 200，路由分发与渠道发送在后台 goroutine 中即时执行（带超时、有限重试，见 FR-2.4）。进程重启导致的在途丢失由 Alertmanager 的 webhook 重发机制兜底（仅限 Fenghuo 未返回 200 的场景；已返回 200 后的 IM 投递失败由有限重试与手动重发兜底）。接入源绑定多渠道时并行发送。
 - 单实例支撑 100 告警/秒的接收峰值。
 - 投递耗时与成功率通过 `/metrics` 暴露。
 

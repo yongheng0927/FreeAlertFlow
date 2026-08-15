@@ -38,7 +38,7 @@ func newStatic(t *testing.T, rootURL string, dist fs.FS) *StaticHandler {
 
 func TestStaticInjectsRuntimeConfig(t *testing.T) {
 	h := newStatic(t, "https://example.com/freealertflow/", testDist())
-	if !strings.Contains(string(h.indexBytes), "window.__FAF_CONFIG__") {
+	if !strings.Contains(string(h.indexBytes), "window.__FENGHUO_CONFIG__") {
 		t.Fatal("index.html must contain the injected config")
 	}
 	for _, want := range []string{

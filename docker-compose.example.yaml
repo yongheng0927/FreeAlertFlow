@@ -12,23 +12,23 @@ services:
     ports:
       - "8080:8080"
     environment:
-      FAF_SERVER_HTTP_ADDR: ":8080"
+      FENGHUO_SERVER_HTTP_ADDR: ":8080"
       # 外部访问地址，反向代理/子路径部署时改成实际地址（FR-6）
-      FAF_SERVER_ROOT_URL: "http://localhost:8080/"
-      FAF_DATABASE_HOST: "db"
-      FAF_DATABASE_PORT: "5432"
-      FAF_DATABASE_USER: "faf"
-      FAF_DATABASE_PASSWORD: "faf"
-      FAF_DATABASE_DBNAME: "freealertflow"
-      FAF_DATABASE_SSLMODE: "disable"
+      FENGHUO_SERVER_ROOT_URL: "http://localhost:8080/"
+      FENGHUO_DATABASE_HOST: "db"
+      FENGHUO_DATABASE_PORT: "5432"
+      FENGHUO_DATABASE_USER: "faf"
+      FENGHUO_DATABASE_PASSWORD: "faf"
+      FENGHUO_DATABASE_DBNAME: "freealertflow"
+      FENGHUO_DATABASE_SSLMODE: "disable"
       # 必须正好 32 字节，以下是仅用于 demo 的弱密钥，生产环境务必通过
-      # 环境变量覆盖：FAF_SECRET_KEY=xxx docker compose up -d
-      FAF_SECRET_KEY: "${FAF_SECRET_KEY:-faf-dev-secret-key-0123456789abc}"
-      FAF_JWT_SECRET: "${FAF_JWT_SECRET:-faf-dev-jwt-secret-change-me}"
+      # 环境变量覆盖：FENGHUO_SECRET_KEY=xxx docker compose up -d
+      FENGHUO_SECRET_KEY: "${FENGHUO_SECRET_KEY:-faf-dev-secret-key-0123456789abc}"
+      FENGHUO_JWT_SECRET: "${FENGHUO_JWT_SECRET:-faf-dev-jwt-secret-change-me}"
       # 首次启动自动创建的初始管理员（FR-5.1），生产环境务必覆盖
-      FAF_ADMIN_USER: "${FAF_ADMIN_USER:-admin}"
-      FAF_ADMIN_PASSWORD: "${FAF_ADMIN_PASSWORD:-admin123456}"
-      FAF_LOG_LEVEL: "info"
+      FENGHUO_ADMIN_USER: "${FENGHUO_ADMIN_USER:-admin}"
+      FENGHUO_ADMIN_PASSWORD: "${FENGHUO_ADMIN_PASSWORD:-admin123456}"
+      FENGHUO_LOG_LEVEL: "info"
       # 出站代理：服务器无法直连外网（如飞书 webhook）时，在 .env 或 shell 里
       # 设置 HTTPS_PROXY=http://host:7897 即可，留空表示直连；
       # Go HTTP 客户端自动读取这组标准变量

@@ -183,7 +183,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPw, n
 }
 
 // BootstrapAdmin 在数据库没有任何用户且配置了
-// FAF_ADMIN_USER/FAF_ADMIN_PASSWORD 时创建初始管理员，否则什么都不做
+// FENGHUO_ADMIN_USER/FENGHUO_ADMIN_PASSWORD 时创建初始管理员，否则什么都不做
 // 返回是否创建了用户
 func (s *AuthService) BootstrapAdmin(ctx context.Context, username, pw string) (bool, error) {
 	if username == "" || pw == "" {

@@ -12,13 +12,13 @@ const testSecret = "0123456789abcdef0123456789abcdef" // 恰好 32 字节
 // setTestDatabaseEnv 设置最小可用的数据库环境变量
 func setTestDatabaseEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("FAF_DATABASE_USER", "faf")
-	t.Setenv("FAF_DATABASE_PASSWORD", "pass")
-	t.Setenv("FAF_DATABASE_DBNAME", "freealertflow")
+	t.Setenv("FENGHUO_DATABASE_USER", "faf")
+	t.Setenv("FENGHUO_DATABASE_PASSWORD", "pass")
+	t.Setenv("FENGHUO_DATABASE_DBNAME", "freealertflow")
 }
 
-// clearFAFEnv 清除所有可能从外部环境泄漏进来的 FAF_* 变量
-func clearFAFEnv(t *testing.T) {
+// clearFenghuoEnv 清除所有可能从外部环境泄漏进来的 FENGHUO_* 变量
+func clearFenghuoEnv(t *testing.T) {
 	t.Helper()
 	for _, kv := range os.Environ() {
 		key := kv
@@ -28,16 +28,16 @@ func clearFAFEnv(t *testing.T) {
 				break
 			}
 		}
-		if len(key) >= 4 && key[:4] == "FAF_" {
+		if len(key) >= 8 && key[:8] == "FENGHUO_" {
 			t.Setenv(key, "") // viper 将空环境变量视为未设置
 		}
 	}
 }
 
 func TestDefaults(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FAF_SECRET_KEY", testSecret)
+	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	setTestDatabaseEnv(t)
 
 	cfg, err := Load()
@@ -74,22 +74,22 @@ func TestDefaults(t *testing.T) {
 	if cfg.JWT.RefreshTTL != 7*24*time.Hour {
 		t.Errorf("refresh_ttl = %v", cfg.JWT.RefreshTTL)
 	}
-	// FAF_JWT_SECRET 未设置：应生成随机密钥并置标志位
+	// FENGHUO_JWT_SECRET 未设置：应生成随机密钥并置标志位
 	if !cfg.JWTSecretGenerated || cfg.JWT.Secret == "" {
 		t.Error("jwt secret should be randomly generated when unset")
 	}
 }
 
 func TestEnvOverridesDefaults(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FAF_SECRET_KEY", testSecret)
+	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	setTestDatabaseEnv(t)
-	t.Setenv("FAF_SERVER_HTTP_ADDR", "0.0.0.0:9090")
-	t.Setenv("FAF_JWT_ACCESS_TTL", "30m")
-	t.Setenv("FAF_JWT_SECRET", "fixed-secret")
-	t.Setenv("FAF_LOG_LEVEL", "debug")
-	t.Setenv("FAF_CHANNEL_RETRY_MAX", "0")
+	t.Setenv("FENGHUO_SERVER_HTTP_ADDR", "0.0.0.0:9090")
+	t.Setenv("FENGHUO_JWT_ACCESS_TTL", "30m")
+	t.Setenv("FENGHUO_JWT_SECRET", "fixed-secret")
+	t.Setenv("FENGHUO_LOG_LEVEL", "debug")
+	t.Setenv("FENGHUO_CHANNEL_RETRY_MAX", "0")
 
 	cfg, err := Load()
 	if err != nil {
@@ -113,7 +113,7 @@ func TestEnvOverridesDefaults(t *testing.T) {
 }
 
 func TestConfigFileAndPrecedence(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	dir := t.TempDir()
 	yaml := []byte(`
 server:
@@ -143,7 +143,7 @@ secret_key: "` + testSecret + `"
 	}
 
 	// 环境变量优先于 config.yaml
-	t.Setenv("FAF_SERVER_HTTP_ADDR", ":2222")
+	t.Setenv("FENGHUO_SERVER_HTTP_ADDR", ":2222")
 	cfg, err = Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -154,28 +154,28 @@ secret_key: "` + testSecret + `"
 }
 
 func TestSecretKeyRequired(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
 	setTestDatabaseEnv(t)
 	if _, err := Load(); err == nil {
-		t.Fatal("Load must fail without FAF_SECRET_KEY")
+		t.Fatal("Load must fail without FENGHUO_SECRET_KEY")
 	}
 }
 
 func TestSecretKeyMustBe32Bytes(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FAF_SECRET_KEY", "too-short")
+	t.Setenv("FENGHUO_SECRET_KEY", "too-short")
 	setTestDatabaseEnv(t)
 	if _, err := Load(); err == nil {
-		t.Fatal("Load must fail when FAF_SECRET_KEY is not 32 bytes")
+		t.Fatal("Load must fail when FENGHUO_SECRET_KEY is not 32 bytes")
 	}
 }
 
 func TestDatabaseConfigRequired(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FAF_SECRET_KEY", testSecret)
+	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	if _, err := Load(); err == nil {
 		t.Fatal("Load must fail without database user/dbname")
 	}
@@ -213,16 +213,16 @@ func TestBasePath(t *testing.T) {
 }
 
 func TestOAuthEnabledRequiresCredentials(t *testing.T) {
-	clearFAFEnv(t)
+	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FAF_SECRET_KEY", testSecret)
+	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	setTestDatabaseEnv(t)
-	t.Setenv("FAF_OAUTH_ENABLED", "true")
+	t.Setenv("FENGHUO_OAUTH_ENABLED", "true")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load must fail when OAuth is enabled without app credentials")
 	}
-	t.Setenv("FAF_OAUTH_FEISHU_APP_ID", "cli_x")
-	t.Setenv("FAF_OAUTH_FEISHU_APP_SECRET", "sec_x")
+	t.Setenv("FENGHUO_OAUTH_FEISHU_APP_ID", "cli_x")
+	t.Setenv("FENGHUO_OAUTH_FEISHU_APP_SECRET", "sec_x")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)

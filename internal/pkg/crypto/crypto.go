@@ -19,7 +19,7 @@ type Cipher struct {
 	aead cipher.AEAD
 }
 
-// New 用 32 字节密钥（来自 FAF_SECRET_KEY）创建 Cipher
+// New 用 32 字节密钥（来自 FENGHUO_SECRET_KEY）创建 Cipher
 func New(key []byte) (*Cipher, error) {
 	if len(key) != KeySize {
 		return nil, fmt.Errorf("key must be exactly %d bytes, got %d", KeySize, len(key))
