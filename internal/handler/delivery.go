@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // DeliveryHandler 提供 /api/v1/deliveries 投递记录接口（editor/admin，FR-2.6）

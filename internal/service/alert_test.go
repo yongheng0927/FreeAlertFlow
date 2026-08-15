@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/render"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/render"
 )
 
 // --- 接入/分发用的内存 fake ---

@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	fafjwt "github.com/yongheng0927/FreeAlertFlow/internal/pkg/jwt"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // JWTAuth 设置的上下文键

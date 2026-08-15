@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/middleware"
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/middleware"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // UserHandler 提供 /api/v1/users/me 端点

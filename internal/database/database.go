@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/yongheng0927/FreeAlertFlow/migrations"
+	"github.com/yongheng0927/fenghuo/migrations"
 )
 
 // Open 通过 GORM 连接 PostgreSQL

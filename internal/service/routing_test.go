@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 func rule(id int64, priority int, match string, cont bool) model.RoutingRule {

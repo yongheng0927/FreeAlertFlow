@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 // OAuth 用户开通（provisioning）相关错误（FR-5.3）

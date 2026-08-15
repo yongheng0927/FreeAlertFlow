@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/crypto"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // MaskCredential 对凭证脱敏用于 API 返回：只显示最后 4 个字符
@@ -232,7 +232,7 @@ func (s *ChannelService) TestSend(ctx context.Context, id int64) (*TestSendResul
 	if ch == nil {
 		return nil, fmt.Errorf("%w: channel %d", ErrNotFound, id)
 	}
-	text := "FreeAlertFlow 测试消息：渠道配置验证成功"
+	text := "烽火台测试消息：渠道配置验证成功"
 	if ch.Keyword != "" && !strings.Contains(text, ch.Keyword) {
 		text = ch.Keyword + " " + text
 	}

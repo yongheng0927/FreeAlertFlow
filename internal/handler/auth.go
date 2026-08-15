@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // fail 输出统一的 JSON 错误结构 {"error": "..."}

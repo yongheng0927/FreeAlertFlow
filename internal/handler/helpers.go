@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // parseIDParam 解析 :id 路径参数，要求为正整数

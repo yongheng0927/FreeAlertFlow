@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/middleware"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/middleware"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // UserAdminHandler 提供 /api/v1/users 用户管理接口（仅 admin，FR-5.4）

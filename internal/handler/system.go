@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/config"
+	"github.com/yongheng0927/fenghuo/internal/config"
 )
 
 // Version 是 /api/v1/system/info 上报的应用版本号

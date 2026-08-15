@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 // RuleService 实现路由规则管理（FR-3）

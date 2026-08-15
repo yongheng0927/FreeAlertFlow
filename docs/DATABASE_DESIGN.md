@@ -1,4 +1,4 @@
-# FreeAlertFlow 数据库设计（V1）
+# 烽火台（Fenghuo） 数据库设计（V1）
 
 > 数据库：**PostgreSQL 18**（最低兼容 16）。PG 建库即 UTF-8，无字符集/排序规则声明负担
 > 所有表统一包含：`id`（`BIGINT GENERATED ALWAYS AS IDENTITY` 主键）、`created_at`、`updated_at`（`TIMESTAMPTZ`，微秒精度），下文不再重复列出

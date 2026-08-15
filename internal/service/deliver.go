@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/metrics"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/render"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/metrics"
+	"github.com/yongheng0927/fenghuo/internal/pkg/render"
 )
 
 // retryBackoffs 是各次重试前的等待时长（FR-2.4：1s、3s）

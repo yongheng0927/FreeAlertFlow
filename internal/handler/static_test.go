@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/config"
+	"github.com/yongheng0927/fenghuo/internal/config"
 )
 
 func testConfig(rootURL string) *config.Config {

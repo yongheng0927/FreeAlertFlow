@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/crypto"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // 飞书自定义机器人业务错误码（官方文档中的 webhook 错误码）

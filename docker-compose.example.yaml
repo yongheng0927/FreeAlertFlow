@@ -1,4 +1,4 @@
-# FreeAlertFlow 一键 demo：app + PostgreSQL 18
+# Fenghuo（烽火台） 一键 demo：app + PostgreSQL 18
 # 用法：cp docker-compose.example.yaml docker-compose.yaml（按需修改），
 # 然后 docker compose up -d --build，访问 http://localhost:8080
 # 数据库不对外暴露端口，仅 compose 内部网络可达
@@ -6,8 +6,8 @@
 services:
   app:
     build: .
-    image: freealertflow:latest
-    container_name: faf-app
+    image: fenghuo:latest
+    container_name: fenghuo-app
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -44,7 +44,7 @@ services:
 
   db:
     image: postgres:18-alpine
-    container_name: faf-db
+    container_name: fenghuo-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: faf

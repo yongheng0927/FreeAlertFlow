@@ -3,8 +3,7 @@
 .vscode/
 
 # Go build outputs
-/faf
-/faf.exe
+/fenghuo
 *.exe
 *.test
 *.out

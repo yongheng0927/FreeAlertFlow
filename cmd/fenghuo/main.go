@@ -1,4 +1,4 @@
-// FreeAlertFlow 入口：装配配置、数据库、各服务以及 HTTP 服务器
+// Fenghuo 入口：装配配置、数据库、各服务以及 HTTP 服务器
 package main
 
 import (
@@ -13,14 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/config"
-	"github.com/yongheng0927/FreeAlertFlow/internal/database"
-	"github.com/yongheng0927/FreeAlertFlow/internal/handler"
-	fafcrypto "github.com/yongheng0927/FreeAlertFlow/internal/pkg/crypto"
-	fafjwt "github.com/yongheng0927/FreeAlertFlow/internal/pkg/jwt"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/render"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
-	"github.com/yongheng0927/FreeAlertFlow/web"
+	"github.com/yongheng0927/fenghuo/internal/config"
+	"github.com/yongheng0927/fenghuo/internal/database"
+	"github.com/yongheng0927/fenghuo/internal/handler"
+	fafcrypto "github.com/yongheng0927/fenghuo/internal/pkg/crypto"
+	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
+	"github.com/yongheng0927/fenghuo/internal/pkg/render"
+	"github.com/yongheng0927/fenghuo/internal/service"
+	"github.com/yongheng0927/fenghuo/web"
 )
 
 func main() {

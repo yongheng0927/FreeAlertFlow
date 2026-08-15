@@ -32,13 +32,13 @@ import { useAuth } from '../auth/useAuth'
 function amYamlExample(url: string): string {
   return `# Alertmanager 配置示例（alertmanager.yml）
 receivers:
-  - name: 'freealertflow'
+  - name: 'fenghuo'
     webhook_configs:
       - url: '${url}'
         send_resolved: true
 
 route:
-  receiver: 'freealertflow'
+  receiver: 'fenghuo'
   # group_wait / group_interval / repeat_interval 按需调整`
 }
 

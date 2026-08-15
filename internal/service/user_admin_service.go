@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 // 用户管理的守卫错误（FR-5.4，仅 admin）

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/metrics"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/metrics"
 )
 
 // webhook 接入的哨兵错误，映射为 HTTP 状态码

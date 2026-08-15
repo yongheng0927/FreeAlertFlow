@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 // GormUserStore 用 GORM/PostgreSQL 实现 UserStore

@@ -1,4 +1,4 @@
--- 0001_init：创建 FreeAlertFlow V1 的全部 9 张表
+-- 0001_init：创建 Fenghuo V1 的全部 9 张表
 -- 依据 DATABASE_DESIGN.md：BIGINT identity 主键、TIMESTAMPTZ、原生 BOOLEAN、
 -- JSONB、BYTEA、VARCHAR 语义枚举（不使用 PG ENUM）、不使用物理外键
 

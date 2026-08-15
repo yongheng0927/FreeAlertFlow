@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/render"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/render"
 )
 
 // ErrBuiltinReadOnly 表示试图修改或删除内置模板

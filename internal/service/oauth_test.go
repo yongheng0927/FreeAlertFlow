@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	fafjwt "github.com/yongheng0927/FreeAlertFlow/internal/pkg/jwt"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
 )
 
 // fakeOAuthProvider 返回预设的用户信息

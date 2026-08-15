@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	fafjwt "github.com/yongheng0927/FreeAlertFlow/internal/pkg/jwt"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/password"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
+	"github.com/yongheng0927/fenghuo/internal/pkg/password"
 )
 
 // --- 实现 store 接口的内存 fake ---

@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // maxWebhookBody 限制 webhook 请求体大小，1 MiB 对 Alertmanager 分组消息

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	fafjwt "github.com/yongheng0927/FreeAlertFlow/internal/pkg/jwt"
-	"github.com/yongheng0927/FreeAlertFlow/internal/pkg/password"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
+	"github.com/yongheng0927/fenghuo/internal/pkg/password"
 )
 
 // 哨兵错误，由 handler 层映射为 HTTP 响应

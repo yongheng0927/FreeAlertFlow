@@ -1,4 +1,4 @@
-# FreeAlertFlow 示例配置
+# Fenghuo（烽火台） 示例配置
 # 每项设置也可以通过 FAF_ 前缀的环境变量提供（点号变为下划线），
 # 例如 server.http_addr -> FAF_SERVER_HTTP_ADDR
 # 优先级：环境变量 > 本文件 > 内置默认值

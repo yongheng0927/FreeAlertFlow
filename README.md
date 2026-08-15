@@ -1,0 +1,35 @@
+# 烽火台（Fenghuo）
+
+**烽火台（Fenghuo）** 是一个自托管的告警转发中台：接收 Alertmanager 的 webhook 告警，按路由规则分组匹配，经 Go template 模板渲染后投递到 IM 机器人（飞书等）。
+
+项目名取自中国古代的烽火台：边疆遇警，昼燔燧、夜举烽，一座座烽火台接力传递，警讯片刻直达中枢。两千年前的边防告警网络，做的事和今天的告警管道一模一样——**采集、路由、送达**。烽火台的追求也和它一样：快、准、不丢。
+
+## 功能特性
+
+- 完整支持飞书自定义机器人签名校验（加签）
+- 自定义 Go template 消息模板，支持在线预览
+- Web 管理界面：通知渠道、路由规则、告警记录、失败投递一键重发
+- 多用户 RBAC（admin / editor / viewer），支持飞书 OAuth 登录
+- 单二进制交付，支持 docker compose 一键部署
+
+## 快速开始
+
+```bash
+cp docker-compose.example.yaml docker-compose.yaml   # 按需修改密钥等配置
+docker compose up -d --build
+```
+
+访问 http://localhost:8080 ，使用 compose 中 `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD` 配置的初始管理员登录。
+
+## 配置
+
+全部配置项见 [config.example.yaml](config.example.yaml)，支持环境变量（`FAF_` 前缀）与 `config.yaml` 两种方式，优先级：环境变量 > config.yaml > 默认值。
+
+## 文档
+
+- [需求文档](docs/REQUIREMENTS.md)
+- [数据库设计](docs/DATABASE_DESIGN.md)
+
+## License
+
+见 [LICENSE](LICENSE)。

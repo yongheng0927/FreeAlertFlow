@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	fafcrypto "github.com/yongheng0927/FreeAlertFlow/internal/pkg/crypto"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	fafcrypto "github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // TestSignKnownAnswer 用一个独立的 openssl 计算向量验证 FR-2.2 的签名算法：

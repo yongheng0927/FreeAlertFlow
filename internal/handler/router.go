@@ -5,11 +5,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/config"
-	"github.com/yongheng0927/FreeAlertFlow/internal/middleware"
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
-	fafjwt "github.com/yongheng0927/FreeAlertFlow/internal/pkg/jwt"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/config"
+	"github.com/yongheng0927/fenghuo/internal/middleware"
+	"github.com/yongheng0927/fenghuo/internal/model"
+	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // Deps 汇总构建 HTTP 路由所需的全部依赖

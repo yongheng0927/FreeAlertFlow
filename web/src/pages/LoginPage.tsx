@@ -60,7 +60,7 @@ export default function LoginPage() {
       <Card style={{ width: 400, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
-            FreeAlertFlow
+            烽火台
           </Typography.Title>
           <Typography.Text type="secondary">
             自托管告警转发中台 · Alertmanager → 飞书

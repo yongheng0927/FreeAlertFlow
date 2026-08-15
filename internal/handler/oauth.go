@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/config"
-	"github.com/yongheng0927/FreeAlertFlow/internal/service"
+	"github.com/yongheng0927/fenghuo/internal/config"
+	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
 // OAuthHandler 提供飞书 OAuth2 登录流程（FR-5.3）：

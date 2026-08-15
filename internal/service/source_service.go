@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 // 管理类 API 共享的哨兵错误

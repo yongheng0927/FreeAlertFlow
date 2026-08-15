@@ -3,7 +3,7 @@ package service
 import (
 	"encoding/json"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/model"
 )
 
 // MatchRules 把某个接入源的路由规则应用到告警 labels 上（FR-3.2）：规则按

@@ -75,7 +75,7 @@ export default function AppLayout() {
             letterSpacing: 0.5,
           }}
         >
-          FreeAlertFlow
+          烽火台
         </div>
         <Menu
           theme="dark"

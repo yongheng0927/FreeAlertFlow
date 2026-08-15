@@ -1,4 +1,4 @@
-module github.com/yongheng0927/FreeAlertFlow
+module github.com/yongheng0927/fenghuo
 
 go 1.25.11
 

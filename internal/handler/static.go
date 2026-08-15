@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/yongheng0927/FreeAlertFlow/internal/config"
+	"github.com/yongheng0927/fenghuo/internal/config"
 )
 
 // StaticHandler 提供内嵌 SPA（web/dist）的静态服务，并注入 runtime 配置
