@@ -69,7 +69,7 @@ FreeAlertFlow 是一个**告警转发中台**：接收 Alertmanager 的 webhook 
 
 ### 4.1 告警接收（Webhook Receiver）
 
-- [ ] **FR-1.1** 提供 Alertmanager webhook 接收端点：
+- [x] **FR-1.1** 提供 Alertmanager webhook 接收端点：
 
 ```
 POST /api/v1/alerts/webhook/:token
@@ -79,16 +79,16 @@ POST /api/v1/alerts/webhook/:token
 - 消息体兼容 Alertmanager v4 webhook 格式（`version: "4"`，含 `alerts[]`、`groupLabels`、`commonLabels`、`externalURL` 等）。
 - 接收后立即异步处理，HTTP 响应不阻塞在 IM 投递上（建议 2s 内返回 200）。
 
-- [ ] **FR-1.2** 告警字段解析：提取 `status`（firing/resolved）、`labels`、`annotations`、`startsAt`、`endsAt`、`fingerprint`，结构化入库。
+- [x] **FR-1.2** 告警字段解析：提取 `status`（firing/resolved）、`labels`、`annotations`、`startsAt`、`endsAt`、`fingerprint`，结构化入库。
 
-- [ ] **FR-1.3** 幂等与去重：同一 `fingerprint + status` 且内容未变化的告警在去重窗口内重复推送时，仅记录不重复发送（窗口由 `FAF_ALERT_DEDUP_WINDOW` 配置，默认 5 分钟）。
+- [x] **FR-1.3** 幂等与去重：同一 `fingerprint + status` 且内容未变化的告警在去重窗口内重复推送时，仅记录不重复发送（窗口由 `FAF_ALERT_DEDUP_WINDOW` 配置，默认 5 分钟）。
 
 - 「内容未变化」以对 `status + labels + annotations`（key 排序后）计算 SHA-256 得到的 `content_hash` 判定，入库时一并存储，避免每次比对完整 JSON。
 - 被去重的告警正常入库但 `disposition` 标记为 `deduped`，不产生投递记录；未命中任何路由规则的标记为 `unmatched`。告警列表可据此区分「没发出去」的原因。
 
 ### 4.2 飞书渠道（Feishu Channel）— V1 核心
 
-- [ ] **FR-2.1** 机器人配置（CRUD），字段包括：
+- [x] **FR-2.1** 机器人配置（CRUD），字段包括：
 
 | 字段 | 说明 |
 |---|---|
@@ -101,7 +101,7 @@ POST /api/v1/alerts/webhook/:token
 
 > 注：消息类型（互动卡片 interactive / 富文本 post）**不在渠道上配置**，由渠道绑定的模板决定——模板渲染结果即完整飞书消息体 JSON（含 `msg_type`）。Webhook URL 与签名密钥在接口返回值中均脱敏展示（仅显示尾部 4 位），编辑时不重新提交则保留原值。
 
-- [ ] **FR-2.2 签名校验（核心痛点）**：
+- [x] **FR-2.2 签名校验（核心痛点）**：
 
 - 当配置了 Secret 时，按飞书官方算法生成签名：
   - `stringToSign = timestamp + "\n" + secret`
@@ -109,7 +109,7 @@ POST /api/v1/alerts/webhook/:token
 - 请求体携带 `timestamp` 与 `sign` 字段。
 - 签名密钥与 Webhook URL 在数据库中**均加密存储**（AES-GCM，密钥由环境变量 `FAF_SECRET_KEY` 提供）：Webhook URL 内含机器人 token，泄露即等于任何人可向群内发消息，敏感度与 Secret 同级，故同等对待。接口返回值均脱敏（仅显示尾部 4 位）。
 
-- [ ] **FR-2.3 消息模板封装（V1 核心亮点）**：
+- [x] **FR-2.3 消息模板封装（V1 核心亮点）**：
 
 - 内置若干基础模板（飞书卡片 critical/warning/resolved 三色、纯文本、富文本 post），开箱即用。
 - **支持用户自定义模板（Go `text/template` 语法）——本项目差异化亮点**：
@@ -120,7 +120,7 @@ POST /api/v1/alerts/webhook/:token
   - 模板渲染结果需校验为合法飞书消息体（JSON 结构校验），非法时拒绝保存并给出原因。
 - 卡片内告警详情跳转链接使用 Root URL 拼接。
 
-- [ ] **FR-2.4 发送语义（有限重试，无重试队列）**：
+- [x] **FR-2.4 发送语义（有限重试，无重试队列）**：
 
 - **职责边界：告警生命周期管理（分组、抑制、静默、告警级重发）是 Alertmanager 的职责，本项目只做「通知编排 + 渠道发送」**。
 - 收到 webhook 后按路由规则分发到渠道，**即时发送**：HTTP 请求级超时（默认 10s）。
@@ -129,9 +129,9 @@ POST /api/v1/alerts/webhook/:token
 - 投递结果（成功/失败、尝试次数、飞书返回码与错误信息、耗时）完整记录到 `deliveries` 表，供页面排查；不做后台重试队列、不做状态机。
 - 飞书侧明确报错（如签名错误、关键词缺失、机器人被移除）时，投递记录中给出人类可读的失败原因提示。
 
-- [ ] **FR-2.5** 测试发送：渠道配置页提供「发送测试消息」按钮，立即验证 URL + 签名是否正确。
+- [x] **FR-2.5** 测试发送：渠道配置页提供「发送测试消息」按钮，立即验证 URL + 签名是否正确。
 
-- [ ] **FR-2.6 失败投递管理（人工兜底）**：
+- [x] **FR-2.6 失败投递管理（人工兜底）**：
 
 - 失败投递列表（editor / admin）：按时间范围、渠道筛选，展示失败原因、尝试次数、关联告警。
 - **手动重发**：editor / admin 可对单条失败投递执行重发——以**当前**渠道配置与模板重新渲染发送（原模板/渠道配置可能正是失败原因，重发应使用修复后的配置）；渠道已删除则拒绝重发并提示。
@@ -140,28 +140,28 @@ POST /api/v1/alerts/webhook/:token
 
 ### 4.3 路由规则（Routing）
 
-- [ ] **FR-3.1** 接入源（Source）→ 渠道（Channel）多对多绑定。
+- [x] **FR-3.1** 接入源（Source）→ 渠道（Channel）多对多绑定。
 
-- [ ] **FR-3.2** 简单路由规则（V1）：按 label 匹配（如 `severity=critical`、`namespace=prod`）将告警分发到指定渠道；支持「默认渠道」兜底；多条规则按优先级排序，命中即发送，可配置是否继续匹配后续规则。
+- [x] **FR-3.2** 简单路由规则（V1）：按 label 匹配（如 `severity=critical`、`namespace=prod`）将告警分发到指定渠道；支持「默认渠道」兜底；多条规则按优先级排序，命中即发送，可配置是否继续匹配后续规则。
 
 ### 4.4 告警记录（Alert History）
 
-- [ ] **FR-4.1** 告警列表：状态、级别、名称、实例、时间范围、渠道筛选；分页。
+- [x] **FR-4.1** 告警列表：状态、级别、名称、实例、时间范围、渠道筛选；分页。
 
-- [ ] **FR-4.2** 告警详情：原始 JSON、渲染后的消息内容、投递记录（渠道、时间、结果、失败原因、重试次数）。
+- [x] **FR-4.2** 告警详情：原始 JSON、渲染后的消息内容、投递记录（渠道、时间、结果、失败原因、重试次数）。
 
 ### 4.5 认证与用户
 
-- [ ] **FR-5.1** 本地账号登录：用户名 + 密码（bcrypt），首次启动若无用户则引导创建管理员（或环境变量预置 `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD`）。
+- [x] **FR-5.1** 本地账号登录：用户名 + 密码（bcrypt），首次启动若无用户则引导创建管理员（或环境变量预置 `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD`）。
 
-- [ ] **FR-5.2 JWT 认证**：
+- [x] **FR-5.2 JWT 认证**：
 
 - Access Token（默认 2h）+ Refresh Token（默认 7d）。
 - V1 统一通过 `Authorization: Bearer` 头传递 token，不使用 cookie——纯 Bearer 方案天然规避 CSRF（见 NFR-1），前端实现也更简单。
 - Refresh Token 存库可吊销；支持登出（吊销对应 refresh token）。
 - 除 `/api/v1/alerts/webhook/:token`、登录/ OAuth 回调、健康检查外，所有 API 需鉴权。
 
-- [ ] **FR-5.3 飞书 OAuth2 授权登录（V1 唯一 OAuth Provider）**：
+- [x] **FR-5.3 飞书 OAuth2 授权登录（V1 唯一 OAuth Provider）**：
 
 - 仅支持飞书开放平台 OAuth（网页授权 / 扫码登录），不做 GitHub/通用 OIDC（后续按需扩展，代码按 provider 接口抽象预留）。
 - 需要用户在飞书开放平台创建「企业自建应用」，配置重定向 URL。
@@ -179,7 +179,7 @@ POST /api/v1/alerts/webhook/:token
 - `FAF_OAUTH_AUTO_CREATE_USER=false` 时仅允许已绑定 `open_id` 的已有用户登录，其余拒绝。
 - 用户表存储飞书头像 URL 与姓名，展示在界面右上角。
 
-- [ ] **FR-5.4 角色**：三级角色（对齐 Grafana 的 Viewer/Editor/Admin 语义）：
+- [x] **FR-5.4 角色**：三级角色（对齐 Grafana 的 Viewer/Editor/Admin 语义）：
 
 | 能力 | viewer | editor | admin |
 |---|---|---|---|
@@ -193,14 +193,14 @@ POST /api/v1/alerts/webhook/:token
 
 ### 4.6 Root URL 配置（类 Grafana）
 
-- [ ] **FR-6.1** 环境变量：
+- [x] **FR-6.1** 环境变量：
 
 ```
 FAF_SERVER_ROOT_URL=https://alerts.example.com/        # 完整外部访问地址
 FAF_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 ```
 
-- [ ] **FR-6.2** 行为要求（对齐 Grafana `GF_SERVER_ROOT_URL` 语义）：
+- [x] **FR-6.2** 行为要求（对齐 Grafana `GF_SERVER_ROOT_URL` 语义）：
 
 - 系统内生成的所有绝对链接（OAuth 回调、告警详情跳转、邮件/卡片中的链接）均基于 Root URL 拼接。
 - 支持子路径部署，如 `FAF_SERVER_ROOT_URL=https://example.com/freealertflow/`，前端路由与 API 均带该前缀正常工作。
@@ -341,10 +341,10 @@ GET    /api/v1/system/info                            版本、Root URL、OAuth 
 
 | 阶段 | 内容 | 验收标准 | 状态 |
 |---|---|---|---|
-| M1 骨架 | 工程脚手架、配置加载、DB 迁移、JWT 登录 | 能登录、能连库 | ⬜ 未开始 |
-| M2 核心链路 | Webhook 接收 → 飞书发送（含加签）→ 记录入库 | 开启签名校验的飞书机器人能收到告警卡片 | ⬜ 未开始 |
-| M3 管理界面 | 渠道/接入源/告警记录页面、模板管理（含在线预览）、路由规则 | 全流程 UI 可操作 | ⬜ 未开始 |
-| M4 OAuth + Root URL | OAuth2 登录、Root URL 子路径部署 | 子路径反向代理下功能完整可用 | ⬜ 未开始 |
+| M1 骨架 | 工程脚手架、配置加载、DB 迁移、JWT 登录 | 能登录、能连库 | ✅ 代码完成，待实机验收 |
+| M2 核心链路 | Webhook 接收 → 飞书发送（含加签）→ 记录入库 | 开启签名校验的飞书机器人能收到告警卡片 | ✅ 代码完成，待实机验收 |
+| M3 管理界面 | 渠道/接入源/告警记录页面、模板管理（含在线预览）、路由规则 | 全流程 UI 可操作 | ✅ 代码完成，待实机验收 |
+| M4 OAuth + Root URL | OAuth2 登录、Root URL 子路径部署 | 子路径反向代理下功能完整可用 | ✅ 代码完成，待实机验收 |
 | M5 打磨 | 测试、Docker、文档、demo compose | `docker compose up` 一键可用 | ⬜ 未开始 |
 
 ---
