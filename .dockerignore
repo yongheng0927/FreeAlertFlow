@@ -1,0 +1,14 @@
+# 构建上下文排除清单，减小体积、避免敏感文件进镜像
+.git
+.idea
+.tools
+docs
+config.yaml
+faf.exe
+*.exe
+*.log
+
+# 前端依赖与构建产物在镜像内重新生成
+web/node_modules
+web/dist
+web/.npm-cache

@@ -49,7 +49,7 @@ type Deps struct {
 // 角色矩阵按 FR-5.4：GET 接口 viewer 起，写操作 editor 起，用户管理仅 admin
 func NewRouter(d *Deps) *gin.Engine {
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(middleware.AccessLog(), gin.Recovery())
 
 	// 所有路由挂在 base path 下（无子路径部署时为空串）
 	base := r.Group(d.Config.BasePath())
