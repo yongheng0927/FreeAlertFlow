@@ -212,7 +212,9 @@ FAF_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 |---|---|---|
 | `FAF_SERVER_HTTP_ADDR` | `:8080` | 监听地址 |
 | `FAF_SERVER_ROOT_URL` | `http://localhost:8080/` | 外部访问根地址 |
-| `FAF_DATABASE_DSN` | — | PostgreSQL DSN，如 `postgres://faf:pass@localhost:5432/freealertflow?sslmode=disable` |
+| `FAF_DATABASE_HOST` / `FAF_DATABASE_PORT` | `localhost` / `5432` | PostgreSQL 地址 |
+| `FAF_DATABASE_USER` / `FAF_DATABASE_PASSWORD` / `FAF_DATABASE_DBNAME` | — | PostgreSQL 账号、密码、库名（user/dbname 必填） |
+| `FAF_DATABASE_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
 | `FAF_SECRET_KEY` | — | 敏感字段加密密钥（32 字节，必填，否则启动失败） |
 | `FAF_JWT_SECRET` | 随机生成（启动警告） | JWT 签名密钥 |
 | `FAF_ADMIN_USER` / `FAF_ADMIN_PASSWORD` | — | 初始管理员 |
