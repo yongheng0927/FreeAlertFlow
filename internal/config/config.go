@@ -39,7 +39,24 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	DSN string
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
+}
+
+// DSN 把分字段配置拼成 postgres:// 连接串（用户名/密码已做 URL 转义）
+func (d DatabaseConfig) DSN() string {
+	u := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(d.User, d.Password),
+		Host:     fmt.Sprintf("%s:%d", d.Host, d.Port),
+		Path:     d.DBName,
+		RawQuery: "sslmode=" + d.SSLMode,
+	}
+	return u.String()
 }
 
 type JWTConfig struct {
@@ -85,6 +102,9 @@ func Load() (*Config, error) {
 	// 默认值依据 REQUIREMENTS §4.7
 	v.SetDefault("server.http_addr", ":8080")
 	v.SetDefault("server.root_url", "http://localhost:8080/")
+	v.SetDefault("database.host", "localhost")
+	v.SetDefault("database.port", 5432)
+	v.SetDefault("database.sslmode", "disable")
 	v.SetDefault("log.level", "info")
 	v.SetDefault("alert.dedup_window", 5*time.Minute)
 	v.SetDefault("alert.retention_days", 30)
@@ -110,7 +130,12 @@ func Load() (*Config, error) {
 			RootURL:  v.GetString("server.root_url"),
 		},
 		Database: DatabaseConfig{
-			DSN: v.GetString("database.dsn"),
+			Host:     v.GetString("database.host"),
+			Port:     v.GetInt("database.port"),
+			User:     v.GetString("database.user"),
+			Password: v.GetString("database.password"),
+			DBName:   v.GetString("database.dbname"),
+			SSLMode:  v.GetString("database.sslmode"),
 		},
 		SecretKey: v.GetString("secret_key"),
 		JWT: JWTConfig{
@@ -146,8 +171,8 @@ func Load() (*Config, error) {
 	if n := len([]byte(cfg.SecretKey)); n != 32 {
 		return nil, fmt.Errorf("FAF_SECRET_KEY must be exactly 32 bytes, got %d", n)
 	}
-	if cfg.Database.DSN == "" {
-		return nil, errors.New("FAF_DATABASE_DSN is required")
+	if cfg.Database.User == "" || cfg.Database.DBName == "" {
+		return nil, errors.New("database config incomplete: FAF_DATABASE_USER and FAF_DATABASE_DBNAME are required")
 	}
 	if cfg.JWT.Secret == "" {
 		b := make([]byte, 32)

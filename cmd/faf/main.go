@@ -42,7 +42,7 @@ func run() error {
 			"all tokens become invalid after restart")
 	}
 
-	db, err := database.Open(cfg.Database.DSN)
+	db, err := database.Open(cfg.Database.DSN())
 	if err != nil {
 		return err
 	}

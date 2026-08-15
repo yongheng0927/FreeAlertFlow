@@ -7,10 +7,15 @@ import (
 	"time"
 )
 
-const (
-	testSecret = "0123456789abcdef0123456789abcdef" // 恰好 32 字节
-	testDSN    = "postgres://faf:pass@localhost:5432/freealertflow?sslmode=disable"
-)
+const testSecret = "0123456789abcdef0123456789abcdef" // 恰好 32 字节
+
+// setTestDatabaseEnv 设置最小可用的数据库环境变量
+func setTestDatabaseEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("FAF_DATABASE_USER", "faf")
+	t.Setenv("FAF_DATABASE_PASSWORD", "pass")
+	t.Setenv("FAF_DATABASE_DBNAME", "freealertflow")
+}
 
 // clearFAFEnv 清除所有可能从外部环境泄漏进来的 FAF_* 变量
 func clearFAFEnv(t *testing.T) {
@@ -33,7 +38,7 @@ func TestDefaults(t *testing.T) {
 	clearFAFEnv(t)
 	t.Chdir(t.TempDir())
 	t.Setenv("FAF_SECRET_KEY", testSecret)
-	t.Setenv("FAF_DATABASE_DSN", testDSN)
+	setTestDatabaseEnv(t)
 
 	cfg, err := Load()
 	if err != nil {
@@ -44,6 +49,9 @@ func TestDefaults(t *testing.T) {
 	}
 	if cfg.Server.RootURL != "http://localhost:8080/" {
 		t.Errorf("root_url = %q", cfg.Server.RootURL)
+	}
+	if cfg.Database.Host != "localhost" || cfg.Database.Port != 5432 || cfg.Database.SSLMode != "disable" {
+		t.Errorf("database defaults = %+v", cfg.Database)
 	}
 	if cfg.Log.Level != "info" {
 		t.Errorf("log level = %q", cfg.Log.Level)
@@ -76,7 +84,7 @@ func TestEnvOverridesDefaults(t *testing.T) {
 	clearFAFEnv(t)
 	t.Chdir(t.TempDir())
 	t.Setenv("FAF_SECRET_KEY", testSecret)
-	t.Setenv("FAF_DATABASE_DSN", testDSN)
+	setTestDatabaseEnv(t)
 	t.Setenv("FAF_SERVER_HTTP_ADDR", "0.0.0.0:9090")
 	t.Setenv("FAF_JWT_ACCESS_TTL", "30m")
 	t.Setenv("FAF_JWT_SECRET", "fixed-secret")
@@ -112,7 +120,9 @@ server:
   http_addr: ":1111"
   root_url: "https://alerts.example.com/"
 database:
-  dsn: "` + testDSN + `"
+  user: "faf"
+  password: "pass"
+  dbname: "freealertflow"
 secret_key: "` + testSecret + `"
 `)
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), yaml, 0o600); err != nil {
@@ -146,7 +156,7 @@ secret_key: "` + testSecret + `"
 func TestSecretKeyRequired(t *testing.T) {
 	clearFAFEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FAF_DATABASE_DSN", testDSN)
+	setTestDatabaseEnv(t)
 	if _, err := Load(); err == nil {
 		t.Fatal("Load must fail without FAF_SECRET_KEY")
 	}
@@ -156,18 +166,33 @@ func TestSecretKeyMustBe32Bytes(t *testing.T) {
 	clearFAFEnv(t)
 	t.Chdir(t.TempDir())
 	t.Setenv("FAF_SECRET_KEY", "too-short")
-	t.Setenv("FAF_DATABASE_DSN", testDSN)
+	setTestDatabaseEnv(t)
 	if _, err := Load(); err == nil {
 		t.Fatal("Load must fail when FAF_SECRET_KEY is not 32 bytes")
 	}
 }
 
-func TestDatabaseDSNRequired(t *testing.T) {
+func TestDatabaseConfigRequired(t *testing.T) {
 	clearFAFEnv(t)
 	t.Chdir(t.TempDir())
 	t.Setenv("FAF_SECRET_KEY", testSecret)
 	if _, err := Load(); err == nil {
-		t.Fatal("Load must fail without FAF_DATABASE_DSN")
+		t.Fatal("Load must fail without database user/dbname")
+	}
+}
+
+func TestDatabaseDSN(t *testing.T) {
+	d := DatabaseConfig{
+		Host:     "db.example.com",
+		Port:     5433,
+		User:     "faf",
+		Password: "p@ss/word",
+		DBName:   "freealertflow",
+		SSLMode:  "require",
+	}
+	want := "postgres://faf:p%40ss%2Fword@db.example.com:5433/freealertflow?sslmode=require"
+	if got := d.DSN(); got != want {
+		t.Errorf("DSN() = %q, want %q", got, want)
 	}
 }
 
@@ -191,7 +216,7 @@ func TestOAuthEnabledRequiresCredentials(t *testing.T) {
 	clearFAFEnv(t)
 	t.Chdir(t.TempDir())
 	t.Setenv("FAF_SECRET_KEY", testSecret)
-	t.Setenv("FAF_DATABASE_DSN", testDSN)
+	setTestDatabaseEnv(t)
 	t.Setenv("FAF_OAUTH_ENABLED", "true")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load must fail when OAuth is enabled without app credentials")

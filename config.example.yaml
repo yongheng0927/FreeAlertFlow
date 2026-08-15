@@ -9,8 +9,13 @@ server:
   root_url: "http://localhost:8080/"     # FAF_SERVER_ROOT_URL
 
 database:
-  # 必填，FAF_DATABASE_DSN
-  dsn: "postgres://faf:pass@localhost:5432/freealertflow?sslmode=disable"
+  # 必填项：user / password / dbname；host / port / sslmode 有默认值
+  host: "localhost"     # FAF_DATABASE_HOST
+  port: 5432            # FAF_DATABASE_PORT
+  user: "faf"           # FAF_DATABASE_USER
+  password: "pass"      # FAF_DATABASE_PASSWORD
+  dbname: "freealertflow"  # FAF_DATABASE_DBNAME
+  sslmode: "disable"    # FAF_DATABASE_SSLMODE
 
 # 必填，必须恰好 32 字节，用于敏感字段加密的 AES-256-GCM 密钥
 # FAF_SECRET_KEY —— 请替换为你自己的随机 32 字节值
