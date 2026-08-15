@@ -21,14 +21,14 @@ services:
       FENGHUO_SERVER_ROOT_URL: "http://localhost:8080/"
       FENGHUO_DATABASE_HOST: "db"
       FENGHUO_DATABASE_PORT: "5432"
-      FENGHUO_DATABASE_USER: "faf"
-      FENGHUO_DATABASE_PASSWORD: "faf"
-      FENGHUO_DATABASE_DBNAME: "freealertflow"
+      FENGHUO_DATABASE_USER: "fenghuo"
+      FENGHUO_DATABASE_PASSWORD: "fenghuo"
+      FENGHUO_DATABASE_DBNAME: "fenghuo"
       FENGHUO_DATABASE_SSLMODE: "disable"
       # 必须正好 32 字节，以下是仅用于 demo 的弱密钥，生产环境务必通过
       # 环境变量覆盖：FENGHUO_SECRET_KEY=xxx docker compose up -d
-      FENGHUO_SECRET_KEY: "${FENGHUO_SECRET_KEY:-faf-dev-secret-key-0123456789abc}"
-      FENGHUO_JWT_SECRET: "${FENGHUO_JWT_SECRET:-faf-dev-jwt-secret-change-me}"
+      FENGHUO_SECRET_KEY: "${FENGHUO_SECRET_KEY:-fenghuo-dev-secret-key-012345678}"
+      FENGHUO_JWT_SECRET: "${FENGHUO_JWT_SECRET:-fenghuo-dev-jwt-secret-change-me}"
       # 首次启动自动创建的初始管理员（FR-5.1），生产环境务必覆盖
       FENGHUO_ADMIN_USER: "${FENGHUO_ADMIN_USER:-admin}"
       FENGHUO_ADMIN_PASSWORD: "${FENGHUO_ADMIN_PASSWORD:-admin123456}"
@@ -51,13 +51,13 @@ services:
     container_name: fenghuo-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: faf
-      POSTGRES_PASSWORD: faf
-      POSTGRES_DB: freealertflow
+      POSTGRES_USER: fenghuo
+      POSTGRES_PASSWORD: fenghuo
+      POSTGRES_DB: fenghuo
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U faf -d freealertflow"]
+      test: ["CMD-SHELL", "pg_isready -U fenghuo -d fenghuo"]
       interval: 5s
       timeout: 3s
       retries: 12
