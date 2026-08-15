@@ -20,3 +20,12 @@ config.yaml
 
 # 本地临时工具与冒烟测试产物
 .tools/
+
+# helm
+deploy/helm
+
+# 本地部署配置（模板见 docker-compose.example.yaml）
+/docker-compose.yaml
+
+# 已知问题清单（本地维护，不入库）
+docs/KNOWN_ISSUES.md

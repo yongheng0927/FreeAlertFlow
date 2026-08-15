@@ -1,5 +1,6 @@
 # FreeAlertFlow 一键 demo：app + PostgreSQL 18
-# 用法：docker compose up -d --build，然后访问 http://localhost:8080
+# 用法：cp docker-compose.example.yaml docker-compose.yaml（按需修改），
+# 然后 docker compose up -d --build，访问 http://localhost:8080
 # 数据库不对外暴露端口，仅 compose 内部网络可达
 
 services:
@@ -28,6 +29,12 @@ services:
       FAF_ADMIN_USER: "${FAF_ADMIN_USER:-admin}"
       FAF_ADMIN_PASSWORD: "${FAF_ADMIN_PASSWORD:-admin123456}"
       FAF_LOG_LEVEL: "info"
+      # 出站代理：服务器无法直连外网（如飞书 webhook）时，在 .env 或 shell 里
+      # 设置 HTTPS_PROXY=http://host:7897 即可，留空表示直连；
+      # Go HTTP 客户端自动读取这组标准变量
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1}"
       # 容器时区：日志时间戳和通知消息里的时间都按 time.Local 输出，
       # 不设则容器回退 UTC（镜像已装 tzdata，Go 直接按 TZ 解析）
       TZ: "${TZ:-Asia/Shanghai}"
