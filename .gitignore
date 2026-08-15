@@ -1,0 +1,18 @@
+# IDE
+.idea/
+.vscode/
+
+# Go build outputs
+/faf
+/faf.exe
+*.exe
+*.test
+*.out
+
+# Frontend (M3)
+node_modules/
+web/dist/
+
+# Local config & secrets（连接信息等不要入库）
+config.yaml
+.env
