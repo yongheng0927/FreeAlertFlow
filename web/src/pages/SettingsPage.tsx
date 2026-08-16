@@ -15,7 +15,7 @@ const ROLE_TEXT: Record<string, string> = {
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null)
   const [saving, setSaving] = useState(false)
@@ -46,11 +46,13 @@ export default function SettingsPage() {
           <Descriptions.Item label="用户名">{user?.username}</Descriptions.Item>
           <Descriptions.Item label="姓名">{user?.name || '-'}</Descriptions.Item>
           <Descriptions.Item label="邮箱">{user?.email || '-'}</Descriptions.Item>
-          <Descriptions.Item label="角色">
-            <Tag color={user?.role === 'admin' ? 'gold' : user?.role === 'editor' ? 'blue' : 'default'}>
-              {user ? ROLE_TEXT[user.role] : '-'}
-            </Tag>
-          </Descriptions.Item>
+          {isAdmin && (
+            <Descriptions.Item label="角色">
+              <Tag color={user?.role === 'admin' ? 'gold' : user?.role === 'editor' ? 'blue' : 'default'}>
+                {user ? ROLE_TEXT[user.role] : '-'}
+              </Tag>
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label="最近登录">{formatTime(user?.last_login_at)}</Descriptions.Item>
           <Descriptions.Item label="账号创建">{formatTime(user?.created_at)}</Descriptions.Item>
         </Descriptions>

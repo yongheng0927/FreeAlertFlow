@@ -52,7 +52,8 @@ export default function AppLayout() {
       .map((it) => (it as { key: string }).key)
       .find((k) => location.pathname.startsWith(k)) ?? '/dashboard'
 
-  const role = user ? ROLE_LABEL[user.role] : undefined
+  // 只有 admin 可见角色标识，其余角色不向本人展示
+  const role = user && isAdmin ? ROLE_LABEL[user.role] : undefined
 
   const onLogout = async () => {
     await logout()
