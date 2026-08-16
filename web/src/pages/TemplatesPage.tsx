@@ -7,15 +7,18 @@ import {
   Col,
   Collapse,
   Divider,
+  Drawer,
   Form,
   Input,
-  List,
   Modal,
   Popconfirm,
   Row,
+  Segmented,
   Select,
   Space,
+  Spin,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -40,6 +43,7 @@ import {
 import { errorMessage } from '../api/client'
 import type { Channel, Template, TemplatePreview, TestSendResult } from '../api/types'
 import { useAuth } from '../auth/useAuth'
+import { formatTime } from '../utils'
 
 const HEADER_COLORS: Record<string, string> = {
   red: '#f5222d',
@@ -327,11 +331,22 @@ function TemplateChannelTypeTag({ type }: { type: string }) {
   return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{type || '-'}</Tag>
 }
 
+type SortBy = 'updated' | 'created'
+
+/** 排序偏好持久化 key */
+const SORT_KEY = 'fenghuo.templates.sort'
+
+function loadSortBy(): SortBy {
+  return localStorage.getItem(SORT_KEY) === 'created' ? 'created' : 'updated'
+}
+
 export default function TemplatesPage() {
   const { canWrite } = useAuth()
   const [templates, setTemplates] = useState<Template[]>([])
   const [listLoading, setListLoading] = useState(false)
-  const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined)
+  const [typeFilter, setTypeFilter] = useState('')
+  const [sortBy, setSortByState] = useState<SortBy>(loadSortBy)
+  const [recentId, setRecentId] = useState<number | null>(null)
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -343,12 +358,20 @@ export default function TemplatesPage() {
   const [testSending, setTestSending] = useState(false)
   const [testResult, setTestResult] = useState<TestSendResult | null>(null)
 
+  const setSortBy = (v: SortBy) => {
+    setSortByState(v)
+    localStorage.setItem(SORT_KEY, v)
+  }
+
   const load = useCallback(async (selectId?: number) => {
     setListLoading(true)
     try {
-      const r = await listTemplates(typeFilter)
+      const r = await listTemplates()
       setTemplates(r.list)
       if (selectId !== undefined) {
+        // 新建/保存后落位高亮几秒，告诉用户卡片在哪
+        setRecentId(selectId)
+        window.setTimeout(() => setRecentId(null), 3000)
         const t = r.list.find((x) => x.id === selectId)
         if (t) selectTemplate(t)
       }
@@ -357,7 +380,7 @@ export default function TemplatesPage() {
     } finally {
       setListLoading(false)
     }
-  }, [typeFilter])
+  }, [])
 
   useEffect(() => {
     void load()
@@ -372,6 +395,12 @@ export default function TemplatesPage() {
       remark: t.remark,
       content: t.content,
     })
+    setPreview(null)
+    setPreviewError('')
+  }
+
+  const openNew = () => {
+    setEditor({ ...EMPTY_EDITOR })
     setPreview(null)
     setPreviewError('')
   }
@@ -473,69 +502,86 @@ export default function TemplatesPage() {
 
   const readOnly = !canWrite || (editor?.isBuiltin ?? false)
 
+  // 渠道过滤 + 排序：同排序值时自定义模板排在内置之前
+  const shown = [...templates]
+    .filter((t) => !typeFilter || t.channel_type === typeFilter)
+    .sort((a, b) => {
+      const diff =
+        sortBy === 'updated' ? b.updated_at.localeCompare(a.updated_at) : b.id - a.id
+      if (diff !== 0) return diff
+      return Number(a.is_builtin) - Number(b.is_builtin) || b.id - a.id
+    })
+
+  const drawerTitle = editor
+    ? editor.id === null
+      ? '新建模板'
+      : editor.isBuiltin
+        ? `查看内置模板：${editor.name}`
+        : `编辑模板：${editor.name}`
+    : ''
+
   return (
-    <Row gutter={16}>
-      <Col span={7}>
-        <Card
-          title="模板列表"
-          size="small"
-          extra={
-            <Space>
-              <Select
+    <>
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }} wrap>
+        <Segmented
+          value={typeFilter}
+          onChange={(v) => setTypeFilter(v as string)}
+          options={[
+            { label: '全部', value: '' },
+            ...Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
+              label: m.label,
+              value,
+            })),
+          ]}
+        />
+        <Segmented
+          value={sortBy}
+          onChange={(v) => setSortBy(v as SortBy)}
+          options={[
+            { label: '最近更新', value: 'updated' },
+            { label: '最新创建', value: 'created' },
+          ]}
+        />
+      </Space>
+
+      <Spin spinning={listLoading}>
+        <Row gutter={[12, 12]}>
+          {canWrite && (
+            <Col xs={24} sm={12} lg={8} xl={6}>
+              <Card
                 size="small"
-                allowClear
-                placeholder="全部渠道"
-                style={{ width: 110 }}
-                value={typeFilter}
-                onChange={(v) => setTypeFilter(v)}
-                options={Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
-                  value,
-                  label: m.label,
-                }))}
-              />
-              {canWrite && (
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditor({ ...EMPTY_EDITOR })
-                    setPreview(null)
-                    setPreviewError('')
-                  }}
-                >
-                  新建
-                </Button>
-              )}
-            </Space>
-          }
-        >
-          <List
-            loading={listLoading}
-            dataSource={templates}
-            renderItem={(t) => (
-              <List.Item
-                style={{
-                  cursor: 'pointer',
-                  background: editor?.id === t.id ? '#e6f4ff' : undefined,
-                  padding: '8px 12px',
-                  borderRadius: 4,
+                hoverable
+                style={{ borderStyle: 'dashed' }}
+                styles={{
+                  body: { height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' },
                 }}
+                onClick={openNew}
+              >
+                <Button type="link" icon={<PlusOutlined />}>
+                  新建模板
+                </Button>
+              </Card>
+            </Col>
+          )}
+          {shown.map((t) => (
+            <Col xs={24} sm={12} lg={8} xl={6} key={t.id}>
+              <Card
+                size="small"
+                hoverable
                 onClick={() => selectTemplate(t)}
+                style={t.id === recentId ? { boxShadow: '0 0 0 2px #1677ff' } : undefined}
+                styles={{ body: { height: 96 } }}
                 actions={
                   canWrite
                     ? [
-                        <Button
-                          key="copy"
-                          size="small"
-                          type="text"
-                          icon={<CopyOutlined />}
-                          title="复制为新模板"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            copyTemplate(t)
-                          }}
-                        />,
+                        <Tooltip title="复制为新模板" key="copy">
+                          <CopyOutlined
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              copyTemplate(t)
+                            }}
+                          />
+                        </Tooltip>,
                         ...(!t.is_builtin
                           ? [
                               <Popconfirm
@@ -547,13 +593,9 @@ export default function TemplatesPage() {
                                 cancelText="取消"
                                 onConfirm={() => void onDelete(t)}
                               >
-                                <Button
-                                  size="small"
-                                  type="text"
-                                  danger
-                                  icon={<DeleteOutlined />}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
+                                <span onClick={(e) => e.stopPropagation()}>
+                                  <DeleteOutlined />
+                                </span>
                               </Popconfirm>,
                             ]
                           : []),
@@ -561,67 +603,73 @@ export default function TemplatesPage() {
                     : undefined
                 }
               >
-                <List.Item.Meta
-                  title={
-                    <Space size={6}>
-                      <span>{t.name}</span>
-                      <TemplateChannelTypeTag type={t.channel_type} />
-                      {t.is_builtin && <Tag color="gold">内置</Tag>}
-                    </Space>
-                  }
-                  description={
-                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
-                      {t.remark || '自定义模板'}
-                    </Typography.Text>
-                  }
-                />
-              </List.Item>
-            )}
-          />
-        </Card>
-      </Col>
+                <Space size={4} style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <Typography.Text strong ellipsis={{ tooltip: t.name }} style={{ maxWidth: 150 }}>
+                    {t.name}
+                  </Typography.Text>
+                  <span style={{ whiteSpace: 'nowrap' }}>
+                    <TemplateChannelTypeTag type={t.channel_type} />
+                    {t.is_builtin && <Tag color="gold">内置</Tag>}
+                  </span>
+                </Space>
+                <Typography.Paragraph
+                  type="secondary"
+                  style={{ fontSize: 12, marginTop: 6, marginBottom: 4 }}
+                  ellipsis={{ rows: 1, tooltip: t.remark || '无备注' }}
+                >
+                  {t.remark || '无备注'}
+                </Typography.Paragraph>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  更新于 {formatTime(t.updated_at)}
+                </Typography.Text>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+        {!listLoading && shown.length === 0 && (
+          <Typography.Text type="secondary">该渠道类型下暂无模板。</Typography.Text>
+        )}
+      </Spin>
 
-      <Col span={17}>
-        {editor ? (
-          <Card
-            size="small"
-            title={
-              editor.id === null
-                ? '新建模板'
-                : editor.isBuiltin
-                  ? `查看内置模板：${editor.name}`
-                  : `编辑模板：${editor.name}`
-            }
-            extra={
-              <Space>
-                <Button icon={<EyeOutlined />} loading={previewing} onClick={() => void onPreview()}>
-                  预览
+      <Drawer
+        width={860}
+        open={editor !== null}
+        onClose={() => setEditor(null)}
+        title={drawerTitle}
+        extra={
+          editor && (
+            <Space>
+              <Button icon={<EyeOutlined />} loading={previewing} onClick={() => void onPreview()}>
+                预览
+              </Button>
+              {canWrite && (
+                <Button icon={<SendOutlined />} onClick={() => void openTestSend()}>
+                  发送测试
                 </Button>
-                {canWrite && (
-                  <Button icon={<SendOutlined />} onClick={() => void openTestSend()}>
-                    发送测试
-                  </Button>
-                )}
-                {!readOnly && (
-                  <Button
-                    type="primary"
-                    icon={<SaveOutlined />}
-                    loading={saving}
-                    disabled={!editor.name.trim() || !editor.content.trim()}
-                    onClick={() => void onSave()}
-                  >
-                    保存
-                  </Button>
-                )}
-              </Space>
-            }
-          >
+              )}
+              {!readOnly && (
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  loading={saving}
+                  disabled={!editor.name.trim() || !editor.content.trim()}
+                  onClick={() => void onSave()}
+                >
+                  保存
+                </Button>
+              )}
+            </Space>
+          )
+        }
+      >
+        {editor && (
+          <>
             {editor.isBuiltin && (
               <Alert
                 type="info"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message="内置模板只读，可点击列表中的复制按钮创建可编辑副本。"
+                message="内置模板只读，可点击卡片上的复制按钮创建可编辑副本。"
               />
             )}
             <Form layout="vertical" disabled={readOnly}>
@@ -653,7 +701,7 @@ export default function TemplatesPage() {
                     <Input
                       value={editor.remark}
                       maxLength={255}
-                      placeholder="可选"
+                      placeholder="一句话说明这个模板是做什么的，会显示在卡片上"
                       onChange={(e) => setEditor({ ...editor, remark: e.target.value })}
                     />
                   </Form.Item>
@@ -667,7 +715,7 @@ export default function TemplatesPage() {
               >
                 <Input.TextArea
                   value={editor.content}
-                  rows={16}
+                  rows={18}
                   spellCheck={false}
                   placeholder={
                     '{"msg_type":"text","content":{"text":"[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}"}}'
@@ -752,15 +800,9 @@ export default function TemplatesPage() {
                 />
               )}
             </Modal>
-          </Card>
-        ) : (
-          <Card size="small">
-            <Typography.Text type="secondary">
-              从左侧选择一个模板查看/编辑，或点击「新建」创建自定义模板。
-            </Typography.Text>
-          </Card>
+          </>
         )}
-      </Col>
-    </Row>
+      </Drawer>
+    </>
   )
 }
