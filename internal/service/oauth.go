@@ -7,8 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
 )
@@ -39,17 +40,16 @@ type OAuthProvider interface {
 	Exchange(ctx context.Context, code string) (*OAuthProfile, error)
 }
 
-// OAuthStateStore 签发和校验带 TTL 的一次性 CSRF state
+// OAuthStateStore 签发和校验带 TTL 的一次性 CSRF state 存储在数据库
+// （0006_oauth_states），多副本部署时签发与回调落在不同实例也能校验
 type OAuthStateStore struct {
-	mu      sync.Mutex
-	ttl     time.Duration
-	entries map[string]time.Time
-	now     func() time.Time // 可注入，便于测试
+	db  *gorm.DB
+	ttl time.Duration
 }
 
 // NewOAuthStateStore 创建带指定 state TTL 的 store
-func NewOAuthStateStore(ttl time.Duration) *OAuthStateStore {
-	return &OAuthStateStore{ttl: ttl, entries: map[string]time.Time{}, now: time.Now}
+func NewOAuthStateStore(db *gorm.DB, ttl time.Duration) *OAuthStateStore {
+	return &OAuthStateStore{db: db, ttl: ttl}
 }
 
 // Issue 生成一个新的随机 state，TTL 内有效
@@ -59,28 +59,22 @@ func (s *OAuthStateStore) Issue() (string, error) {
 		return "", err
 	}
 	state := hex.EncodeToString(b)
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	// 顺带清理已过期的 state
-	for k, exp := range s.entries {
-		if s.now().After(exp) {
-			delete(s.entries, k)
-		}
+	if err := s.db.Exec("DELETE FROM oauth_states WHERE expires_at < ?", time.Now()).Error; err != nil {
+		return "", err
 	}
-	s.entries[state] = s.now().Add(s.ttl)
+	if err := s.db.Exec("INSERT INTO oauth_states (state, expires_at) VALUES (?, ?)",
+		state, time.Now().Add(s.ttl)).Error; err != nil {
+		return "", err
+	}
 	return state, nil
 }
 
-// Consume 校验 state 并删除（一次性使用）
+// Consume 校验 state 并删除（一次性使用）：原子 DELETE 保证并发/多副本下
+// 同一 state 只能被消费一次，且未过期才命中
 func (s *OAuthStateStore) Consume(state string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	exp, ok := s.entries[state]
-	if !ok {
-		return false
-	}
-	delete(s.entries, state)
-	return s.now().Before(exp)
+	res := s.db.Exec("DELETE FROM oauth_states WHERE state = ? AND expires_at > ?", state, time.Now())
+	return res.Error == nil && res.RowsAffected == 1
 }
 
 // OAuthService 把 provider 身份绑定到本地用户（FR-5.3）

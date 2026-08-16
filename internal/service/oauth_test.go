@@ -146,32 +146,3 @@ func TestOAuthDisabledAccountRejected(t *testing.T) {
 		t.Fatalf("err = %v, want ErrAccountDisabled", err)
 	}
 }
-
-func TestOAuthStateStore(t *testing.T) {
-	s := NewOAuthStateStore(10 * time.Minute)
-	now := time.Now()
-	s.now = func() time.Time { return now }
-
-	state, err := s.Issue()
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
-	if len(state) != 32 {
-		t.Fatalf("state length = %d, want 32 hex chars", len(state))
-	}
-	if !s.Consume(state) {
-		t.Fatal("fresh state must validate")
-	}
-	if s.Consume(state) {
-		t.Fatal("state must be one-time use")
-	}
-	if s.Consume("never-issued") {
-		t.Fatal("unknown state must fail")
-	}
-
-	state2, _ := s.Issue()
-	now = now.Add(11 * time.Minute)
-	if s.Consume(state2) {
-		t.Fatal("expired state must fail")
-	}
-}

@@ -103,7 +103,7 @@ func run() error {
 		oauthSvc = service.NewOAuthService(provider, userStore, oauthStore, authSvc,
 			cfg.OAuth.AutoCreateUser, cfg.OAuth.AllowedEmails)
 	}
-	oauthStates := service.NewOAuthStateStore(10 * time.Minute)
+	oauthStates := service.NewOAuthStateStore(db, 10*time.Minute)
 	distFS, err := fs.Sub(web.DistFS, "dist")
 	if err != nil {
 		return err
