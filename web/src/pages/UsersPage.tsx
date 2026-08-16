@@ -118,6 +118,7 @@ export default function UsersPage() {
           <span>
             {u.name || u.username}
             {me?.id === u.id && <Tag style={{ marginLeft: 6 }}>我</Tag>}
+            {u.is_initial && <Tag color="gold">初始</Tag>}
           </span>
         </Space>
       ),
@@ -141,7 +142,7 @@ export default function UsersPage() {
         <Switch
           size="small"
           checked={enabled}
-          disabled={me?.id === u.id}
+          disabled={me?.id === u.id || u.is_initial}
           onChange={(v) => void onToggleEnabled(u, v)}
         />
       ),
@@ -156,6 +157,7 @@ export default function UsersPage() {
           <Button
             size="small"
             type="link"
+            disabled={u.is_initial}
             onClick={() => {
               setRoleModalUser(u)
               setRoleValue(u.role)
@@ -171,7 +173,7 @@ export default function UsersPage() {
             cancelText="取消"
             onConfirm={() => void onDelete(u)}
           >
-            <Button size="small" type="link" danger disabled={me?.id === u.id}>
+            <Button size="small" type="link" danger disabled={me?.id === u.id || u.is_initial}>
               删除
             </Button>
           </Popconfirm>

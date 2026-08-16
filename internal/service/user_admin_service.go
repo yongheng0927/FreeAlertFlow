@@ -14,6 +14,8 @@ import (
 var (
 	ErrLastAdmin        = errors.New("cannot disable, demote or delete the last admin")
 	ErrCannotDeleteSelf = errors.New("cannot delete your own account")
+	// ErrInitialAdmin 表示试图降级、禁用或删除初始管理员（FR-5.1 创建的账号）
+	ErrInitialAdmin = errors.New("the initial admin account cannot be demoted, disabled or deleted")
 )
 
 // UserAdminService 实现仅 admin 可用的用户管理
@@ -21,11 +23,18 @@ type UserAdminService struct {
 	users  UserStore
 	tokens RefreshTokenStore
 	oauth  OAuthIdentityStore
+	// initialAdmin 是初始管理员的用户名（FENGHUO_ADMIN_USER），该账号受保护
+	initialAdmin string
 }
 
 // NewUserAdminService 创建 UserAdminService
-func NewUserAdminService(users UserStore, tokens RefreshTokenStore, oauth OAuthIdentityStore) *UserAdminService {
-	return &UserAdminService{users: users, tokens: tokens, oauth: oauth}
+func NewUserAdminService(users UserStore, tokens RefreshTokenStore, oauth OAuthIdentityStore, initialAdmin string) *UserAdminService {
+	return &UserAdminService{users: users, tokens: tokens, oauth: oauth, initialAdmin: initialAdmin}
+}
+
+// IsInitial 报告用户是否为受保护的初始管理员
+func (s *UserAdminService) IsInitial(u *model.User) bool {
+	return s.initialAdmin != "" && u.Username == s.initialAdmin
 }
 
 // ValidRole 报告 role 是否为 viewer/editor/admin 之一
@@ -87,6 +96,10 @@ func (s *UserAdminService) Update(ctx context.Context, targetID int64,
 	if target == nil {
 		return nil, fmt.Errorf("%w: user %d", ErrNotFound, targetID)
 	}
+	// 初始管理员不能被改角色或禁用
+	if s.IsInitial(target) && ((role != nil && *role != target.Role) || (enabled != nil && !*enabled)) {
+		return nil, ErrInitialAdmin
+	}
 	newRole, newEnabled := target.Role, target.Enabled
 	if role != nil {
 		if !ValidRole(*role) {
@@ -133,6 +146,10 @@ func (s *UserAdminService) Delete(ctx context.Context, actorID, targetID int64) 
 	}
 	if target == nil {
 		return fmt.Errorf("%w: user %d", ErrNotFound, targetID)
+	}
+	// 初始管理员不能被删除
+	if s.IsInitial(target) {
+		return ErrInitialAdmin
 	}
 	if target.Role == model.RoleAdmin && target.Enabled {
 		n, err := s.users.CountEnabledAdmins(ctx)

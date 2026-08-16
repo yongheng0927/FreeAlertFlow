@@ -31,6 +31,7 @@ type userResponse struct {
 	AvatarURL   string     `json:"avatar_url"`
 	Role        string     `json:"role"`
 	Enabled     bool       `json:"enabled"`
+	IsInitial   bool       `json:"is_initial,omitempty"` // 是否受保护的初始管理员
 	LastLoginAt *time.Time `json:"last_login_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 }

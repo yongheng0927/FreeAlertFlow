@@ -549,7 +549,7 @@ func newUserAdminService() (*UserAdminService, *fakeUserStore, *fakeTokenStore, 
 	users := newFakeUserStore()
 	tokens := newFakeTokenStore()
 	oauth := &fakeOAuthIdentityStore{}
-	return NewUserAdminService(users, tokens, oauth), users, tokens, oauth
+	return NewUserAdminService(users, tokens, oauth, "admin1"), users, tokens, oauth
 }
 
 func TestUserAdminCreate(t *testing.T) {
@@ -594,6 +594,33 @@ func TestUserAdminCreate(t *testing.T) {
 	}
 }
 
+func TestUserAdminInitialAdminGuards(t *testing.T) {
+	svc, users, _, _ := newUserAdminService() // 测试夹具中 admin1 即初始管理员
+	initial := users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
+	users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
+	ctx := context.Background()
+
+	// 初始管理员：改角色、禁用、删除都被拒
+	if _, err := svc.Update(ctx, initial.ID, strPtr("editor"), nil); !errors.Is(err, ErrInitialAdmin) {
+		t.Fatalf("demote initial: err = %v, want ErrInitialAdmin", err)
+	}
+	if _, err := svc.Update(ctx, initial.ID, nil, boolPtr(false)); !errors.Is(err, ErrInitialAdmin) {
+		t.Fatalf("disable initial: err = %v, want ErrInitialAdmin", err)
+	}
+	if err := svc.Delete(ctx, 999, initial.ID); !errors.Is(err, ErrInitialAdmin) {
+		t.Fatalf("delete initial: err = %v, want ErrInitialAdmin", err)
+	}
+	// 相同角色/启用状态的原样更新是允许的（幂等操作不算降级）
+	if _, err := svc.Update(ctx, initial.ID, strPtr("admin"), boolPtr(true)); err != nil {
+		t.Fatalf("no-op update on initial admin: %v", err)
+	}
+	// 其他 admin 不受此守卫影响（仍有最后一个 admin 守卫兜底）
+	other, _ := users.FindByUsername(ctx, "admin2")
+	if _, err := svc.Update(ctx, other.ID, strPtr("editor"), nil); err != nil {
+		t.Fatalf("demote non-initial admin: %v", err)
+	}
+}
+
 func TestUserAdminUpdateRole(t *testing.T) {
 	svc, users, _, _ := newUserAdminService()
 	users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
@@ -630,8 +657,8 @@ func TestUserAdminDisableRevokesTokens(t *testing.T) {
 }
 
 func TestUserAdminLastAdminGuards(t *testing.T) {
-	svc, users, _, _ := newUserAdminService()
-	admin := users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
+	svc, users, _, _ := newUserAdminService() // admin1 是初始管理员，这里用非初始账号验证最后 admin 守卫
+	admin := users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
 
 	if _, err := svc.Update(context.Background(), admin.ID, strPtr("editor"), nil); !errors.Is(err, ErrLastAdmin) {
 		t.Fatalf("demote last admin: %v", err)
@@ -644,7 +671,7 @@ func TestUserAdminLastAdminGuards(t *testing.T) {
 	}
 
 	// 有了第二个 admin 后守卫解除
-	users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
+	users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
 	if _, err := svc.Update(context.Background(), admin.ID, strPtr("editor"), nil); err != nil {
 		t.Fatalf("demote with second admin present: %v", err)
 	}

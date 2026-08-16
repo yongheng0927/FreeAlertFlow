@@ -86,7 +86,7 @@ func run() error {
 	channelSvc := service.NewChannelService(channelStore, ruleStore, templateStore, cipher, sender)
 	templateSvc := service.NewTemplateService(templateStore, channelStore, alertStore, renderEngine, sender, cfg.Server.RootURL)
 	ruleSvc := service.NewRuleService(ruleStore, sourceStore, channelStore)
-	userAdminSvc := service.NewUserAdminService(userStore, tokenStore, oauthStore)
+	userAdminSvc := service.NewUserAdminService(userStore, tokenStore, oauthStore, cfg.Admin.User)
 
 	// M4：飞书 OAuth（FR-5.3）以及带配置注入的内嵌 SPA
 	var oauthSvc *service.OAuthService

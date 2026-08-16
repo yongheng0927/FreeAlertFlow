@@ -90,6 +90,8 @@ func serviceError(c *gin.Context, err error) {
 		fail(c, http.StatusConflict, msg)
 	case errors.Is(err, service.ErrLastAdmin):
 		fail(c, http.StatusConflict, msg)
+	case errors.Is(err, service.ErrInitialAdmin):
+		fail(c, http.StatusConflict, msg)
 	case errors.Is(err, service.ErrCannotDeleteSelf):
 		fail(c, http.StatusBadRequest, msg)
 	case errors.Is(err, service.ErrBadPayload):

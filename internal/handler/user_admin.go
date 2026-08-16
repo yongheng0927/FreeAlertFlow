@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/yongheng0927/fenghuo/internal/middleware"
+	"github.com/yongheng0927/fenghuo/internal/model"
 	"github.com/yongheng0927/fenghuo/internal/service"
 )
 
@@ -20,6 +21,13 @@ func NewUserAdminHandler(users service.UserStore, svc *service.UserAdminService)
 	return &UserAdminHandler{users: users, svc: svc}
 }
 
+// toView 输出用户视图并标记受保护的初始管理员
+func (h *UserAdminHandler) toView(u *model.User) userResponse {
+	v := toUserResponse(u)
+	v.IsInitial = h.svc.IsInitial(u)
+	return v
+}
+
 // List 处理 GET /api/v1/users
 func (h *UserAdminHandler) List(c *gin.Context) {
 	offset, limit, page, size := pageParams(c)
@@ -30,7 +38,7 @@ func (h *UserAdminHandler) List(c *gin.Context) {
 	}
 	views := make([]userResponse, 0, len(users))
 	for i := range users {
-		views = append(views, toUserResponse(&users[i]))
+		views = append(views, h.toView(&users[i]))
 	}
 	listJSON(c, views, total, page, size)
 }
@@ -53,7 +61,7 @@ func (h *UserAdminHandler) Create(c *gin.Context) {
 		serviceError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, toUserResponse(user))
+	c.JSON(http.StatusCreated, h.toView(user))
 }
 
 type userUpdateRequest struct {
@@ -81,7 +89,7 @@ func (h *UserAdminHandler) Update(c *gin.Context) {
 		serviceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toUserResponse(user))
+	c.JSON(http.StatusOK, h.toView(user))
 }
 
 // Delete 处理 DELETE /api/v1/users/:id
