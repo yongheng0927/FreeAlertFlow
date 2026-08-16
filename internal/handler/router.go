@@ -122,6 +122,7 @@ func NewRouter(d *Deps) *gin.Engine {
 		editor.PUT("/templates/:id", templateH.Update)
 		editor.DELETE("/templates/:id", templateH.Delete)
 		editor.POST("/templates/preview", templateH.Preview)
+		editor.POST("/templates/test-send", templateH.TestSend)
 
 		editor.POST("/rules", ruleH.Create)
 		editor.PUT("/rules/:id", ruleH.Update)

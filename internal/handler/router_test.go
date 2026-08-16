@@ -29,7 +29,7 @@ func TestNewRouterRegistersAllRoutes(t *testing.T) {
 			"/api/v1/alerts/webhook/:token",
 			"/api/v1/sources", "/api/v1/sources/:id/rotate-token",
 			"/api/v1/channels", "/api/v1/channels/:id/test",
-			"/api/v1/templates", "/api/v1/templates/preview",
+			"/api/v1/templates", "/api/v1/templates/preview", "/api/v1/templates/test-send",
 			"/api/v1/rules", "/api/v1/deliveries/:id/resend",
 		},
 		"PUT": {

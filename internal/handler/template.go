@@ -177,3 +177,50 @@ func (h *TemplateHandler) Preview(c *gin.Context) {
 	// 与前端约定的契约：rendered 是渲染出的渠道消息体 JSON 字符串
 	c.JSON(http.StatusOK, gin.H{"rendered": rendered})
 }
+
+type templateTestSendRequest struct {
+	Content     string          `json:"content"`
+	ChannelType string          `json:"channel_type"`
+	TemplateID  *int64          `json:"template_id"`
+	Alert       json.RawMessage `json:"alert"`
+	ChannelID   int64           `json:"channel_id" binding:"required"`
+}
+
+// TestSend 处理 POST /api/v1/templates/test-send：把模板渲染结果真实投递到
+// 选定渠道，让用户在 IM 客户端看到真实渲染效果（对标通知测试）
+func (h *TemplateHandler) TestSend(c *gin.Context) {
+	var req templateTestSendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, "channel_id is required")
+		return
+	}
+	content := req.Content
+	channelType := req.ChannelType
+	if content == "" && req.TemplateID != nil {
+		tmpl, err := h.templates.FindByID(c.Request.Context(), *req.TemplateID)
+		if err != nil {
+			fail(c, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if tmpl == nil {
+			fail(c, http.StatusNotFound, "template not found")
+			return
+		}
+		content = tmpl.Content
+		channelType = tmpl.ChannelType
+	}
+	if content == "" {
+		fail(c, http.StatusBadRequest, "content or template_id is required")
+		return
+	}
+	if channelType == "" {
+		channelType = model.ChannelTypeFeishu
+	}
+	res, err := h.svc.TestSend(c.Request.Context(), content, channelType, req.Alert, req.ChannelID)
+	if err != nil {
+		serviceError(c, err)
+		return
+	}
+	// 与 channels/:id/test 一致：发送失败也是 200，结果体现在 body
+	c.JSON(http.StatusOK, res)
+}

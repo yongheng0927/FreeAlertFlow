@@ -84,7 +84,7 @@ func run() error {
 	// M3 管理服务
 	sourceSvc := service.NewSourceService(sourceStore, ruleStore, alertStore)
 	channelSvc := service.NewChannelService(channelStore, ruleStore, templateStore, cipher, sender)
-	templateSvc := service.NewTemplateService(templateStore, channelStore, alertStore, renderEngine, cfg.Server.RootURL)
+	templateSvc := service.NewTemplateService(templateStore, channelStore, alertStore, renderEngine, sender, cfg.Server.RootURL)
 	ruleSvc := service.NewRuleService(ruleStore, sourceStore, channelStore)
 	userAdminSvc := service.NewUserAdminService(userStore, tokenStore, oauthStore)
 

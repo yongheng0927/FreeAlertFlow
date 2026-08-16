@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
 	"github.com/yongheng0927/fenghuo/internal/pkg/render"
@@ -18,13 +20,14 @@ type TemplateService struct {
 	channels  ChannelStore
 	alerts    AlertStore
 	engine    *render.Engine
+	sender    Sender
 	rootURL   string
 }
 
 // NewTemplateService 创建 TemplateService
 func NewTemplateService(templates TemplateStore, channels ChannelStore, alerts AlertStore,
-	engine *render.Engine, rootURL string) *TemplateService {
-	return &TemplateService{templates: templates, channels: channels, alerts: alerts, engine: engine, rootURL: rootURL}
+	engine *render.Engine, sender Sender, rootURL string) *TemplateService {
+	return &TemplateService{templates: templates, channels: channels, alerts: alerts, engine: engine, sender: sender, rootURL: rootURL}
 }
 
 // TemplateInput 承载模板的创建/更新字段
@@ -189,4 +192,38 @@ func (s *TemplateService) Preview(ctx context.Context, content, channelType stri
 	}
 	rctx := buildRenderContext(msg, "模板预览", s.rootURL)
 	return s.engine.Render(content, rctx, channelType)
+}
+
+// TestSend 把模板渲染结果真实投递到指定渠道（对标 FR-2.5 的渠道测试）：
+// 渲染逻辑与 Preview 完全一致，发送复用渠道自己的加密凭证 有意不写
+// deliveries 记录：测试发送没有关联告警
+func (s *TemplateService) TestSend(ctx context.Context, content, channelType string,
+	alertJSON []byte, channelID int64) (*TestSendResult, error) {
+	ch, err := s.channels.FindByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if ch == nil {
+		return nil, fmt.Errorf("%w: channel %d", ErrNotFound, channelID)
+	}
+	if ch.Type != channelType {
+		return nil, validationErr("channel %d is %s, but the template renders for %s", channelID, ch.Type, channelType)
+	}
+	rendered, err := s.Preview(ctx, content, channelType, alertJSON)
+	if err != nil {
+		return nil, err
+	}
+	// 关键词预检与投递流水线一致（deliver.go）：本地给出比渠道报错更清晰的提示
+	if ch.Keyword != "" && !strings.Contains(rendered, ch.Keyword) {
+		return nil, validationErr("rendered message does not contain the required keyword %q", ch.Keyword)
+	}
+	start := time.Now()
+	res := s.sender.Send(ctx, ch, []byte(rendered))
+	return &TestSendResult{
+		Success:    res.Success(),
+		HTTPStatus: res.HTTPStatus,
+		Code:       res.Code,
+		Msg:        res.Message(),
+		DurationMS: time.Since(start).Milliseconds(),
+	}, nil
 }

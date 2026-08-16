@@ -320,7 +320,8 @@ func newTemplateService(t *testing.T) (*TemplateService, *fakeTemplateStore, *fa
 	templates := newFakeTemplateStore(t)
 	channels := &fakeChannelStore{byID: map[int64]*model.Channel{}}
 	alerts := newFakeAlertStore()
-	svc := NewTemplateService(templates, channels, alerts, render.NewEngine(time.UTC), "https://alerts.example.com/")
+	sender := &fakeSender{results: []SendResult{okResult()}}
+	svc := NewTemplateService(templates, channels, alerts, render.NewEngine(time.UTC), sender, "https://alerts.example.com/")
 	return svc, templates, channels, alerts
 }
 
@@ -429,6 +430,50 @@ func TestTemplatePreviewFallbacks(t *testing.T) {
 	}
 	if _, err := svc.Preview(ctx, tmpl, "slack", nil); !errors.Is(err, ErrValidation) {
 		t.Fatalf("bad channel type: err = %v", err)
+	}
+}
+
+func TestTemplateTestSend(t *testing.T) {
+	templates := newFakeTemplateStore(t)
+	channels := &fakeChannelStore{byID: map[int64]*model.Channel{}}
+	alerts := newFakeAlertStore()
+	sender := &fakeSender{results: []SendResult{okResult()}}
+	svc := NewTemplateService(templates, channels, alerts, render.NewEngine(time.UTC), sender, "https://alerts.example.com/")
+	ctx := context.Background()
+
+	// 成功路径：渲染结果送达类型匹配的渠道
+	channels.byID[1] = &model.Channel{ID: 1, Name: "fs", Type: "feishu"}
+	res, err := svc.TestSend(ctx, validTemplateContent, "feishu", nil, 1)
+	if err != nil || !res.Success {
+		t.Fatalf("res = %+v, err = %v, want success", res, err)
+	}
+	if sender.calls != 1 {
+		t.Fatalf("sender calls = %d", sender.calls)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(sender.payloads[0], &m); err != nil || m["msg_type"] != "text" {
+		t.Fatalf("sent payload must be the rendered feishu message: %q", sender.payloads[0])
+	}
+
+	// 渠道类型不匹配
+	if _, err := svc.TestSend(ctx, validTemplateContent, "dingtalk", nil, 1); !errors.Is(err, ErrValidation) {
+		t.Fatalf("type mismatch: err = %v, want ErrValidation", err)
+	}
+	// 渠道不存在
+	if _, err := svc.TestSend(ctx, validTemplateContent, "feishu", nil, 999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing channel: err = %v, want ErrNotFound", err)
+	}
+	// 渲染结果缺少渠道关键词：本地拦截，不发送
+	channels.byID[2] = &model.Channel{ID: 2, Name: "kw", Type: "feishu", Keyword: "必须出现的关键词"}
+	if _, err := svc.TestSend(ctx, validTemplateContent, "feishu", nil, 2); !errors.Is(err, ErrValidation) {
+		t.Fatalf("keyword miss: err = %v, want ErrValidation", err)
+	}
+	if sender.calls != 1 {
+		t.Fatalf("keyword miss must not send, sender calls = %d", sender.calls)
+	}
+	// 渲染失败
+	if _, err := svc.TestSend(ctx, "{{ .Bogus", "feishu", nil, 1); err == nil {
+		t.Fatal("syntax error must fail")
 	}
 }
 

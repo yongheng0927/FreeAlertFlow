@@ -10,6 +10,7 @@ import {
   Form,
   Input,
   List,
+  Modal,
   Popconfirm,
   Row,
   Select,
@@ -18,11 +19,26 @@ import {
   Typography,
   message,
 } from 'antd'
-import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons'
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  SendOutlined,
+} from '@ant-design/icons'
 
-import { createTemplate, deleteTemplate, listTemplates, previewTemplate, updateTemplate } from '../api'
+import {
+  createTemplate,
+  deleteTemplate,
+  listChannels,
+  listTemplates,
+  previewTemplate,
+  testTemplateSend,
+  updateTemplate,
+} from '../api'
 import { errorMessage } from '../api/client'
-import type { Template, TemplatePreview } from '../api/types'
+import type { Channel, Template, TemplatePreview, TestSendResult } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 
 const HEADER_COLORS: Record<string, string> = {
@@ -321,6 +337,11 @@ export default function TemplatesPage() {
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<TemplatePreview | null>(null)
   const [previewError, setPreviewError] = useState('')
+  const [testOpen, setTestOpen] = useState(false)
+  const [testChannels, setTestChannels] = useState<Channel[]>([])
+  const [testChannelId, setTestChannelId] = useState<number | undefined>(undefined)
+  const [testSending, setTestSending] = useState(false)
+  const [testResult, setTestResult] = useState<TestSendResult | null>(null)
 
   const load = useCallback(async (selectId?: number) => {
     setListLoading(true)
@@ -391,6 +412,35 @@ export default function TemplatesPage() {
       setPreviewError(errorMessage(err, '预览失败'))
     } finally {
       setPreviewing(false)
+    }
+  }
+
+  const openTestSend = async () => {
+    if (!editor) return
+    setTestResult(null)
+    setTestChannelId(undefined)
+    try {
+      const r = await listChannels()
+      const usable = r.list.filter((c) => c.type === editor.channelType)
+      setTestChannels(usable)
+      if (usable.length === 1) setTestChannelId(usable[0].id)
+      setTestOpen(true)
+    } catch (err) {
+      message.error(errorMessage(err, '加载渠道列表失败'), 6)
+    }
+  }
+
+  const onTestSend = async () => {
+    if (!editor || testChannelId === undefined) return
+    setTestSending(true)
+    setTestResult(null)
+    try {
+      const r = await testTemplateSend(editor.content, editor.channelType, testChannelId)
+      setTestResult(r)
+    } catch (err) {
+      message.error(errorMessage(err, '发送测试失败'), 6)
+    } finally {
+      setTestSending(false)
     }
   }
 
@@ -547,6 +597,11 @@ export default function TemplatesPage() {
                 <Button icon={<EyeOutlined />} loading={previewing} onClick={() => void onPreview()}>
                   预览
                 </Button>
+                {canWrite && (
+                  <Button icon={<SendOutlined />} onClick={() => void openTestSend()}>
+                    发送测试
+                  </Button>
+                )}
                 {!readOnly && (
                   <Button
                     type="primary"
@@ -655,6 +710,48 @@ export default function TemplatesPage() {
                 )}
               </>
             )}
+
+            <Modal
+              title="发送测试"
+              open={testOpen}
+              okText="发送"
+              cancelText="关闭"
+              okButtonProps={{ disabled: testChannelId === undefined, loading: testSending }}
+              onOk={() => void onTestSend()}
+              onCancel={() => setTestOpen(false)}
+            >
+              <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+                用当前编辑器中的模板内容渲染样例告警，真实投递到所选渠道（不会写入投递记录）。
+              </Typography.Paragraph>
+              {testChannels.length === 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={`没有 ${TEMPLATE_CHANNEL_TYPES[editor.channelType]?.label ?? editor.channelType} 类型的渠道，请先到「通知渠道」页创建。`}
+                />
+              ) : (
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder="选择接收测试消息的渠道"
+                  value={testChannelId}
+                  onChange={(v) => setTestChannelId(v)}
+                  options={testChannels.map((c) => ({ value: c.id, label: c.name }))}
+                />
+              )}
+              {testResult && (
+                <Alert
+                  style={{ marginTop: 12 }}
+                  type={testResult.success ? 'success' : 'error'}
+                  showIcon
+                  message={testResult.success ? `发送成功，耗时 ${testResult.duration_ms} ms` : '发送失败'}
+                  description={
+                    testResult.success
+                      ? undefined
+                      : `HTTP ${testResult.http_status}，code=${testResult.code}，${testResult.msg || '-'}`
+                  }
+                />
+              )}
+            </Modal>
           </Card>
         ) : (
           <Card size="small">

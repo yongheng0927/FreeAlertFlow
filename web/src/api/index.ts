@@ -174,6 +174,19 @@ export async function previewTemplate(content: string, channelType: string): Pro
   return data
 }
 
+export async function testTemplateSend(
+  content: string,
+  channelType: string,
+  channelId: number,
+): Promise<TestSendResult> {
+  const { data } = await api.post<TestSendResult>('/v1/templates/test-send', {
+    content,
+    channel_type: channelType,
+    channel_id: channelId,
+  })
+  return data
+}
+
 // ---- 路由规则 ----
 export interface RuleInput {
   source_id: number
