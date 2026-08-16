@@ -30,7 +30,6 @@ type Context struct {
 	// 系统变量
 	SourceName string
 	RootURL    string
-	DetailURL  string // 基于 RootURL 的告警详情页链接
 }
 
 // Alert 是模板上下文中的单条告警

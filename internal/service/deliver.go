@@ -112,7 +112,7 @@ func (d *Deliverer) deliver(ctx context.Context, alert *model.Alert, msg *AMWebh
 			SendResult{Code: -1, Msg: err.Error()}, nil)
 	}
 
-	rctx := buildRenderContext(msg, alert, sourceName, d.rootURL)
+	rctx := buildRenderContext(msg, sourceName, d.rootURL)
 	payload, err := d.engine.Render(tmpl.Content, rctx)
 	if err != nil {
 		return d.record(alert, ch, ruleID, triggerType, 1, start,
@@ -206,8 +206,8 @@ func (d *Deliverer) record(alert *model.Alert, ch *model.Channel, ruleID int64, 
 	return row
 }
 
-// buildRenderContext 用入库的分组负载和当前告警行构建模板上下文（FR-2.3）
-func buildRenderContext(msg *AMWebhook, alert *model.Alert, sourceName, rootURL string) *render.Context {
+// buildRenderContext 用入库的分组负载构建模板上下文（FR-2.3）
+func buildRenderContext(msg *AMWebhook, sourceName, rootURL string) *render.Context {
 	rctx := &render.Context{
 		Version:           msg.Version,
 		Status:            msg.Status,
@@ -219,7 +219,6 @@ func buildRenderContext(msg *AMWebhook, alert *model.Alert, sourceName, rootURL 
 		CommonAnnotations: msg.CommonAnnotations,
 		SourceName:        sourceName,
 		RootURL:           rootURL,
-		DetailURL:         strings.TrimRight(rootURL, "/") + "/alerts/" + fmt.Sprint(alert.ID),
 	}
 	for _, a := range msg.Alerts {
 		rctx.Alerts = append(rctx.Alerts, render.Alert{

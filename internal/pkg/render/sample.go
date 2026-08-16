@@ -40,6 +40,5 @@ func SampleContext() *Context {
 		},
 		SourceName: "生产环境 Prometheus",
 		RootURL:    "https://alerts.example.com/",
-		DetailURL:  "https://alerts.example.com/alerts/42",
 	}
 }

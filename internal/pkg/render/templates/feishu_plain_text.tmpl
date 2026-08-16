@@ -1,6 +1,6 @@
 {
   "msg_type": "text",
   "content": {
-    "text": "[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}\n级别: {{ label .CommonLabels "severity" | jesc }}\n来源: {{ jesc .SourceName }}\n告警条数: {{ len .Alerts }}{{ range .Alerts }}\n实例: {{ label .Labels "instance" | jesc }} 开始: {{ timeFormat "2006-01-02 15:04:05" .StartsAt }}\n{{ label .Annotations "summary" | truncate 200 | jesc }}{{ end }}\n详情: {{ jesc .DetailURL }}"
+    "text": "[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}\n级别: {{ label .CommonLabels "severity" | jesc }}\n来源: {{ jesc .SourceName }}\n告警条数: {{ len .Alerts }}{{ range .Alerts }}\n实例: {{ label .Labels "instance" | jesc }} 开始: {{ timeFormat "2006-01-02 15:04:05" .StartsAt }}\n{{ label .Annotations "summary" | truncate 200 | jesc }}{{ end }}"
   }
 }

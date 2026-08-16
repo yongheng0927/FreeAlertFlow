@@ -20,9 +20,7 @@ INSERT INTO templates (name, channel_type, content, is_builtin, remark) VALUES
       ]},
       {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
       {"tag": "div", "text": {"tag": "lark_md", "content": "**实例** {{ label $a.Labels "instance" | jesc }}\n**开始时间** {{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n{{ label $a.Annotations "summary" | truncate 200 | mdEscape | jesc }}"}}
-      {{ end }},
-      {"tag": "hr"},
-      {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "查看告警详情"}, "url": "{{ jesc .DetailURL }}", "type": "primary"}]}
+      {{ end }}
     ]
   }
 }
@@ -44,9 +42,7 @@ $faf$, TRUE, 'Builtin: critical alert card (red header)'),
       ]},
       {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
       {"tag": "div", "text": {"tag": "lark_md", "content": "**实例** {{ label $a.Labels "instance" | jesc }}\n**开始时间** {{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n{{ label $a.Annotations "summary" | truncate 200 | mdEscape | jesc }}"}}
-      {{ end }},
-      {"tag": "hr"},
-      {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "查看告警详情"}, "url": "{{ jesc .DetailURL }}", "type": "primary"}]}
+      {{ end }}
     ]
   }
 }
@@ -67,9 +63,7 @@ $faf$, TRUE, 'Builtin: warning alert card (orange header)'),
       ]},
       {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
       {"tag": "div", "text": {"tag": "lark_md", "content": "**实例** {{ label $a.Labels "instance" | jesc }}\n**开始时间** {{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n**恢复时间** {{ timeFormat "2006-01-02 15:04:05" $a.EndsAt }}"}}
-      {{ end }},
-      {"tag": "hr"},
-      {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "查看告警详情"}, "url": "{{ jesc .DetailURL }}", "type": "primary"}]}
+      {{ end }}
     ]
   }
 }
@@ -78,7 +72,7 @@ $faf$, TRUE, 'Builtin: resolved notification card (green header)'),
 {
   "msg_type": "text",
   "content": {
-    "text": "[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}\n级别: {{ label .CommonLabels "severity" | jesc }}\n来源: {{ jesc .SourceName }}\n告警条数: {{ len .Alerts }}{{ range .Alerts }}\n实例: {{ label .Labels "instance" | jesc }} 开始: {{ timeFormat "2006-01-02 15:04:05" .StartsAt }}\n{{ label .Annotations "summary" | truncate 200 | jesc }}{{ end }}\n详情: {{ jesc .DetailURL }}"
+    "text": "[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}\n级别: {{ label .CommonLabels "severity" | jesc }}\n来源: {{ jesc .SourceName }}\n告警条数: {{ len .Alerts }}{{ range .Alerts }}\n实例: {{ label .Labels "instance" | jesc }} 开始: {{ timeFormat "2006-01-02 15:04:05" .StartsAt }}\n{{ label .Annotations "summary" | truncate 200 | jesc }}{{ end }}"
   }
 }
 $faf$, TRUE, 'Builtin: plain text message');

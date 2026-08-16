@@ -178,6 +178,6 @@ func (s *TemplateService) Preview(ctx context.Context, content string, alertJSON
 	if err != nil {
 		return "", err
 	}
-	rctx := buildRenderContext(msg, &model.Alert{}, "模板预览", s.rootURL)
+	rctx := buildRenderContext(msg, "模板预览", s.rootURL)
 	return s.engine.Render(content, rctx)
 }

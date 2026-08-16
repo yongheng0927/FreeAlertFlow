@@ -13,9 +13,7 @@
       ]},
       {{ range $i, $a := .Alerts }}{{ if $i }},{{ end }}
       {"tag": "div", "text": {"tag": "lark_md", "content": "**实例** {{ label $a.Labels "instance" | jesc }}\n**开始时间** {{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n**恢复时间** {{ timeFormat "2006-01-02 15:04:05" $a.EndsAt }}"}}
-      {{ end }},
-      {"tag": "hr"},
-      {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "查看告警详情"}, "url": "{{ jesc .DetailURL }}", "type": "primary"}]}
+      {{ end }}
     ]
   }
 }
