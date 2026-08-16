@@ -45,17 +45,25 @@ func run() error {
 	}
 	setupLogger(cfg.Log.Level)
 
-	if cfg.JWTSecretGenerated {
-		slog.Warn("FENGHUO_JWT_SECRET not set, generated a random secret; " +
-			"all tokens become invalid after restart")
-	}
-
 	db, err := database.Open(cfg.Database.DSN())
 	if err != nil {
 		return err
 	}
 	if err := database.Migrate(db); err != nil {
 		return err
+	}
+
+	// 未显式配置 JWT 密钥时，随机生成值会持久化到 app_settings：重启和
+	// 多副本共用同一个密钥，token 不再随重启失效
+	jwtSecret := cfg.JWT.Secret
+	if cfg.JWTSecretGenerated {
+		jwtSecret, err = service.LoadOrStoreSetting(context.Background(),
+			db, service.SettingKeyJWTSecret, cfg.JWT.Secret)
+		if err != nil {
+			return err
+		}
+		slog.Warn("FENGHUO_JWT_SECRET not set; using a generated secret persisted in app_settings " +
+			"(set it explicitly for full control)")
 	}
 
 	userStore := service.NewGormUserStore(db)
@@ -68,7 +76,7 @@ func run() error {
 	templateStore := service.NewGormTemplateStore(db)
 	deliveryStore := service.NewGormDeliveryStore(db)
 
-	jwtMgr := fafjwt.NewManager([]byte(cfg.JWT.Secret), cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
+	jwtMgr := fafjwt.NewManager([]byte(jwtSecret), cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authSvc := service.NewAuthService(userStore, tokenStore, jwtMgr)
 
 	// M2 核心链路：webhook 接入 -> 去重 -> 路由 -> 渲染 -> 发送

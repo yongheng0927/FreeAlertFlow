@@ -29,7 +29,7 @@ type Config struct {
 	OAuth     OAuthConfig
 
 	// JWTSecretGenerated 为 true 表示 jwt.secret 为空，启动时生成了随机
-	// 密钥（重启后所有 token 失效）
+	// 密钥（会被持久化到 app_settings，重启不失效；多副本共享）
 	JWTSecretGenerated bool
 }
 

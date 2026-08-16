@@ -11,7 +11,7 @@ import (
 // TestEmbeddedMigrationsParse 确保内嵌的 SQL 文件是合法的
 // golang-migrate source（0001_init、0002_builtin_templates、
 // 0003_markdown_templates、0004_channel_templates、
-// 0005_channel_payload_templates、0006_oauth_states）
+// 0005_channel_payload_templates、0006_oauth_states、0007_app_settings）
 func TestEmbeddedMigrationsParse(t *testing.T) {
 	src, err := iofs.New(FS, ".")
 	if err != nil {
@@ -20,7 +20,7 @@ func TestEmbeddedMigrationsParse(t *testing.T) {
 	defer src.Close()
 
 	versions := []uint{1}
-	for i := uint(2); i <= 6; i++ {
+	for i := uint(2); i <= 7; i++ {
 		versions = append(versions, i)
 	}
 	v, err := src.First()
@@ -37,10 +37,10 @@ func TestEmbeddedMigrationsParse(t *testing.T) {
 			}
 		}
 	}
-	if _, err := src.Next(6); err == nil {
-		t.Fatal("expected exactly six migrations")
+	if _, err := src.Next(7); err == nil {
+		t.Fatal("expected exactly seven migrations")
 	} else if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("Next(6) err = %v, want os.ErrNotExist", err)
+		t.Fatalf("Next(7) err = %v, want os.ErrNotExist", err)
 	}
 
 	for _, v := range versions {

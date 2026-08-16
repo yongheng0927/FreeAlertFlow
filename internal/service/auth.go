@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/yongheng0927/fenghuo/internal/model"
 	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
 	"github.com/yongheng0927/fenghuo/internal/pkg/password"
@@ -208,6 +210,11 @@ func (s *AuthService) BootstrapAdmin(ctx context.Context, username, pw string) (
 		Enabled:      true,
 	}
 	if err := s.users.Create(ctx, user); err != nil {
+		// 多副本同时首启：另一个实例已抢先创建，视为未创建而非失败
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return false, nil
+		}
 		return false, fmt.Errorf("create initial admin: %w", err)
 	}
 	return true, nil
