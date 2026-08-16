@@ -40,15 +40,18 @@ func (s *TemplateService) validateInput(in TemplateInput) error {
 	if in.Name == "" {
 		return validationErr("name is required")
 	}
-	if in.ChannelType != "feishu" {
-		return validationErr("channel_type must be feishu in V1")
+	// 模板按渠道类型归属：feishu / dingtalk / wecom 三选一
+	switch in.ChannelType {
+	case model.ChannelTypeFeishu, model.ChannelTypeDingTalk, model.ChannelTypeWeCom:
+	default:
+		return validationErr("channel_type must be feishu, dingtalk or wecom")
 	}
 	if in.Content == "" {
 		return validationErr("content is required")
 	}
-	// 渲染结果必须是合法的 IM 消息体（FR-2.3）
-	if _, err := s.engine.Render(in.Content, render.SampleContext()); err != nil {
-		return validationErr("template does not render a valid message: %v", err)
+	// 模板必须能用样例上下文渲染出本渠道的合法消息体（FR-2.3）
+	if _, err := s.engine.Render(in.Content, render.SampleContext(), in.ChannelType); err != nil {
+		return validationErr("template does not render: %v", err)
 	}
 	return nil
 }
@@ -159,9 +162,15 @@ const samplePayload = `{
 
 // Preview 用告警负载渲染模板（content 或 template_id）：优先用调用方提供
 // 的 JSON，否则用最近一条入库告警，最后用内置样例（FR-2.3 在线预览）
-func (s *TemplateService) Preview(ctx context.Context, content string, alertJSON []byte) (string, error) {
+// channelType 决定按哪家渠道校验渲染结果；返回渲染出的消息体 JSON 字符串
+func (s *TemplateService) Preview(ctx context.Context, content, channelType string, alertJSON []byte) (string, error) {
 	if content == "" {
 		return "", validationErr("content is required")
+	}
+	switch channelType {
+	case model.ChannelTypeFeishu, model.ChannelTypeDingTalk, model.ChannelTypeWeCom:
+	default:
+		return "", validationErr("channel_type must be feishu, dingtalk or wecom")
 	}
 	payload := alertJSON
 	if len(payload) == 0 {
@@ -179,5 +188,5 @@ func (s *TemplateService) Preview(ctx context.Context, content string, alertJSON
 		return "", err
 	}
 	rctx := buildRenderContext(msg, "模板预览", s.rootURL)
-	return s.engine.Render(content, rctx)
+	return s.engine.Render(content, rctx, channelType)
 }

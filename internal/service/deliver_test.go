@@ -258,7 +258,7 @@ func TestDeliverBoundTemplateUsed(t *testing.T) {
 	templates := newFakeTemplateStore(t)
 	templates.byID[9] = &model.Template{
 		ID: 9, ChannelType: "feishu",
-		Content: `{"msg_type":"text","content":{"text":"custom {{ label .CommonLabels "alertname" }}"}}`,
+		Content: `{"msg_type":"text","content":{"text":"custom {{ label .CommonLabels "alertname" | jesc }}"}}`,
 	}
 	d := NewDeliverer(templates, deliveries, newFakeAlertStore(), &fakeChannelStore{byID: map[int64]*model.Channel{}}, &fakeSourceStore{byToken: map[string]*model.Source{}}, sender, render.NewEngine(time.UTC), 2, "https://x/")
 	tplID := int64(9)

@@ -1,5 +1,6 @@
 // Package render 实现消息模板引擎（FR-2.3）：Go text/template + Sprig +
-// 自定义函数，渲染出完整的 IM 消息体 JSON（并校验其中包含合法的 msg_type）
+// 自定义函数，渲染出按渠道类型编写的完整消息体 JSON，并按渠道类型校验
+// 其中包含合法的消息类型字段
 package render
 
 import (
@@ -14,6 +15,10 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 )
+
+// BuiltinChannelTypes 是内置模板覆盖的渠道类型；模板必须归属具体渠道，
+// 内容是该渠道消息体的完整 payload Go template
+var BuiltinChannelTypes = []string{"feishu", "dingtalk", "wecom"}
 
 // Context 是暴露给消息模板的模板上下文（FR-2.3）
 type Context struct {
@@ -43,13 +48,19 @@ type Alert struct {
 	Fingerprint  string
 }
 
-// legalMsgTypes 是可作为渲染结果的飞书消息类型
-var legalMsgTypes = map[string]bool{
+// legalFeishuMsgTypes 是可作为渲染结果的飞书消息类型
+var legalFeishuMsgTypes = map[string]bool{
 	"text":        true,
 	"post":        true,
 	"interactive": true,
 	"image":       true,
 	"share_chat":  true,
+}
+
+// legalMarkdownMsgTypes 是钉钉/企微机器人支持的消息类型
+var legalMarkdownMsgTypes = map[string]bool{
+	"text":     true,
+	"markdown": true,
 }
 
 // Engine 使用 Sprig 和自定义函数渲染模板
@@ -65,9 +76,9 @@ func NewEngine(loc *time.Location) *Engine {
 	return &Engine{loc: loc}
 }
 
-// Render 用 ctx 执行 tmplText，并校验结果是合法的 IM 消息体（包含已知
-// msg_type 的有效 JSON）
-func (e *Engine) Render(tmplText string, ctx *Context) (string, error) {
+// Render 用 ctx 执行 tmplText，并按 channelType 校验结果是该渠道的合法
+// 消息体（有效 JSON 且消息类型字段合法）
+func (e *Engine) Render(tmplText string, ctx *Context, channelType string) (string, error) {
 	tmpl, err := template.New("message").Funcs(e.funcMap()).Parse(tmplText)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
@@ -77,28 +88,39 @@ func (e *Engine) Render(tmplText string, ctx *Context) (string, error) {
 		return "", fmt.Errorf("execute template: %w", err)
 	}
 	out := buf.String()
-	if err := ValidateMessageJSON(out); err != nil {
+	if err := ValidatePayloadJSON(out, channelType); err != nil {
 		return "", err
 	}
 	return out, nil
 }
 
-// ValidateMessageJSON 检查 s 是包含合法 msg_type 的有效 JSON
-func ValidateMessageJSON(s string) error {
+// ValidatePayloadJSON 检查 s 是 channelType 渠道的合法消息体：
+// 飞书要求 msg_type 已知；钉钉/企微要求 msgtype ∈ {text, markdown}
+func ValidatePayloadJSON(s, channelType string) error {
 	var body map[string]any
 	if err := json.Unmarshal([]byte(s), &body); err != nil {
 		return fmt.Errorf("rendered result is not valid JSON: %w", err)
 	}
-	mt, _ := body["msg_type"].(string)
-	if !legalMsgTypes[mt] {
-		return fmt.Errorf("rendered result has missing or illegal msg_type %q", mt)
+	switch channelType {
+	case "feishu":
+		mt, _ := body["msg_type"].(string)
+		if !legalFeishuMsgTypes[mt] {
+			return fmt.Errorf("rendered result has missing or illegal msg_type %q", mt)
+		}
+	case "dingtalk", "wecom":
+		mt, _ := body["msgtype"].(string)
+		if !legalMarkdownMsgTypes[mt] {
+			return fmt.Errorf("rendered result has missing or illegal msgtype %q (want text or markdown)", mt)
+		}
+	default:
+		return fmt.Errorf("unsupported channel type %q", channelType)
 	}
 	return nil
 }
 
 func (e *Engine) funcMap() template.FuncMap {
 	fm := sprig.TxtFuncMap()
-	fm["severityColor"] = severityColor
+	fm["severityColor"] = SeverityColor
 	fm["timeFormat"] = e.timeFormat
 	fm["label"] = labelValue
 	fm["truncate"] = truncate
@@ -107,8 +129,9 @@ func (e *Engine) funcMap() template.FuncMap {
 	return fm
 }
 
-// severityColor 将 severity 映射为飞书卡片头部颜色
-func severityColor(sev string) string {
+// SeverityColor 将 severity 映射为渠道卡片/消息的提示色（如飞书卡片头部
+// 颜色）
+func SeverityColor(sev string) string {
 	switch strings.ToLower(sev) {
 	case "critical", "fatal", "error":
 		return "red"
@@ -145,7 +168,7 @@ func truncate(n int, s string) string {
 	return string(r[:n]) + "…"
 }
 
-// mdEscape 为 lark_md 文本转义 Markdown 元字符
+// mdEscape 为 markdown（如 lark_md）文本转义 Markdown 元字符
 var mdEscaper = strings.NewReplacer(
 	`\`, `\\`,
 	"`", "\\`",
@@ -164,7 +187,7 @@ func jsonEscape(s string) string {
 	return q[1 : len(q)-1]
 }
 
-// --- 内置模板（由迁移 0002 镜像到数据库） ---
+// --- 内置模板（由迁移 0005 镜像到数据库） ---
 
 //go:embed templates/*.tmpl
 var builtinFS embed.FS
@@ -177,17 +200,26 @@ type BuiltinTemplate struct {
 	Remark      string
 }
 
-// builtinFiles 将模板名映射到对应的内嵌文件和备注
+// builtinFiles 按渠道类型组织内置模板文件：4 个模板名 × 3 个渠道类型 =
+// 12 条记录，文件命名 templates/{channel}_{name}.tmpl
 var builtinFiles = []struct {
-	name, file, remark string
+	name, channelType, file, remark string
 }{
-	{"critical-card", "templates/feishu_critical_card.tmpl", "Builtin: critical alert card (red header)"},
-	{"warning-card", "templates/feishu_warning_card.tmpl", "Builtin: warning alert card (orange header)"},
-	{"resolved-card", "templates/feishu_resolved_card.tmpl", "Builtin: resolved notification card (green header)"},
-	{"plain-text", "templates/feishu_plain_text.tmpl", "Builtin: plain text message"},
+	{"critical-card", "feishu", "templates/feishu_critical_card.tmpl", "Builtin: critical alert card (red header)"},
+	{"warning-card", "feishu", "templates/feishu_warning_card.tmpl", "Builtin: warning alert card (orange header)"},
+	{"resolved-card", "feishu", "templates/feishu_resolved_card.tmpl", "Builtin: resolved notification card (green header)"},
+	{"plain-text", "feishu", "templates/feishu_plain_text.tmpl", "Builtin: plain text message"},
+	{"critical-card", "dingtalk", "templates/dingtalk_critical_card.tmpl", "Builtin: critical alert (markdown)"},
+	{"warning-card", "dingtalk", "templates/dingtalk_warning_card.tmpl", "Builtin: warning alert (markdown)"},
+	{"resolved-card", "dingtalk", "templates/dingtalk_resolved_card.tmpl", "Builtin: resolved notification (markdown)"},
+	{"plain-text", "dingtalk", "templates/dingtalk_plain_text.tmpl", "Builtin: plain markdown message"},
+	{"critical-card", "wecom", "templates/wecom_critical_card.tmpl", "Builtin: critical alert (markdown)"},
+	{"warning-card", "wecom", "templates/wecom_warning_card.tmpl", "Builtin: warning alert (markdown)"},
+	{"resolved-card", "wecom", "templates/wecom_resolved_card.tmpl", "Builtin: resolved notification (markdown)"},
+	{"plain-text", "wecom", "templates/wecom_plain_text.tmpl", "Builtin: plain markdown message"},
 }
 
-// BuiltinTemplates 返回所有内置模板（channel_type 为 feishu）
+// BuiltinTemplates 返回所有内置模板：每个模板文件一条记录
 func BuiltinTemplates() ([]BuiltinTemplate, error) {
 	out := make([]BuiltinTemplate, 0, len(builtinFiles))
 	for _, b := range builtinFiles {
@@ -197,7 +229,7 @@ func BuiltinTemplates() ([]BuiltinTemplate, error) {
 		}
 		out = append(out, BuiltinTemplate{
 			Name:        b.name,
-			ChannelType: "feishu",
+			ChannelType: b.channelType,
 			Content:     string(content),
 			Remark:      b.remark,
 		})

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -47,11 +48,24 @@ func NewChannelService(channels ChannelStore, rules RuleStore, templates Templat
 // ChannelInput 承载渠道的创建/更新字段
 type ChannelInput struct {
 	Name       string
+	Type       string // feishu / dingtalk / wecom；空 = feishu（兼容旧调用方）
 	WebhookURL string // 更新时为空 = 保持原值
 	Keyword    string
 	TemplateID *int64 // 更新时 nil = 保持原值，解绑用 ClearTemplate
 	AtAll      bool
 	Enabled    bool
+}
+
+// channelWebhookHosts 是各渠道机器人 webhook 的合法主机名
+var channelWebhookHosts = map[string]string{
+	model.ChannelTypeFeishu:   "open.feishu.cn",
+	model.ChannelTypeDingTalk: "oapi.dingtalk.com",
+	model.ChannelTypeWeCom:    "qyapi.weixin.qq.com",
+}
+
+func validChannelType(t string) bool {
+	_, ok := channelWebhookHosts[t]
+	return ok
 }
 
 // ChannelPatch 承载可选的更新字段
@@ -66,13 +80,17 @@ type ChannelPatch struct {
 	Enabled       *bool
 }
 
-func validateWebhookURL(raw string) error {
+func validateWebhookURL(raw, chType string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return validationErr("webhook_url is not a valid URL")
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return validationErr("webhook_url must be http(s)")
+	}
+	if host, ok := channelWebhookHosts[chType]; ok &&
+		!strings.EqualFold(u.Hostname(), host) {
+		return validationErr("webhook_url host must be %s for %s channels", host, chType)
 	}
 	return nil
 }
@@ -82,10 +100,17 @@ func (s *ChannelService) Create(ctx context.Context, in ChannelInput, secret str
 	if in.Name == "" {
 		return nil, validationErr("name is required")
 	}
+	chType := in.Type
+	if chType == "" {
+		chType = model.ChannelTypeFeishu
+	}
+	if !validChannelType(chType) {
+		return nil, validationErr("type must be feishu, dingtalk or wecom")
+	}
 	if in.WebhookURL == "" {
 		return nil, validationErr("webhook_url is required")
 	}
-	if err := validateWebhookURL(in.WebhookURL); err != nil {
+	if err := validateWebhookURL(in.WebhookURL, chType); err != nil {
 		return nil, err
 	}
 	existing, err := s.channels.FindByName(ctx, in.Name)
@@ -95,7 +120,7 @@ func (s *ChannelService) Create(ctx context.Context, in ChannelInput, secret str
 	if existing != nil {
 		return nil, fmt.Errorf("%w: %q", ErrDuplicateName, in.Name)
 	}
-	if err := s.checkTemplate(ctx, in.TemplateID); err != nil {
+	if err := s.checkTemplate(ctx, chType, in.TemplateID); err != nil {
 		return nil, err
 	}
 	encURL, err := s.cipher.Encrypt([]byte(in.WebhookURL))
@@ -104,14 +129,15 @@ func (s *ChannelService) Create(ctx context.Context, in ChannelInput, secret str
 	}
 	ch := &model.Channel{
 		Name:                in.Name,
-		Type:                "feishu",
+		Type:                chType,
 		WebhookURLEncrypted: encURL,
 		Keyword:             in.Keyword,
 		TemplateID:          in.TemplateID,
 		AtAll:               in.AtAll,
 		Enabled:             in.Enabled,
 	}
-	if secret != "" {
+	// 企业微信机器人无加签机制，secret 仅对 feishu/dingtalk 有效
+	if secret != "" && chType != model.ChannelTypeWeCom {
 		enc, err := s.cipher.Encrypt([]byte(secret))
 		if err != nil {
 			return nil, err
@@ -150,7 +176,7 @@ func (s *ChannelService) Update(ctx context.Context, id int64, p ChannelPatch) (
 		ch.Name = *p.Name
 	}
 	if p.WebhookURL != nil && *p.WebhookURL != "" {
-		if err := validateWebhookURL(*p.WebhookURL); err != nil {
+		if err := validateWebhookURL(*p.WebhookURL, ch.Type); err != nil {
 			return nil, err
 		}
 		enc, err := s.cipher.Encrypt([]byte(*p.WebhookURL))
@@ -159,7 +185,7 @@ func (s *ChannelService) Update(ctx context.Context, id int64, p ChannelPatch) (
 		}
 		ch.WebhookURLEncrypted = enc
 	}
-	if p.Secret != nil {
+	if p.Secret != nil && ch.Type != model.ChannelTypeWeCom { // 企微无加签，忽略
 		if *p.Secret == "" {
 			ch.SecretEncrypted = nil // 显式清除
 		} else {
@@ -176,7 +202,7 @@ func (s *ChannelService) Update(ctx context.Context, id int64, p ChannelPatch) (
 	if p.ClearTemplate {
 		ch.TemplateID = nil
 	} else if p.TemplateID != nil {
-		if err := s.checkTemplate(ctx, p.TemplateID); err != nil {
+		if err := s.checkTemplate(ctx, ch.Type, p.TemplateID); err != nil {
 			return nil, err
 		}
 		ch.TemplateID = p.TemplateID
@@ -236,9 +262,13 @@ func (s *ChannelService) TestSend(ctx context.Context, id int64) (*TestSendResul
 	if ch.Keyword != "" && !strings.Contains(text, ch.Keyword) {
 		text = ch.Keyword + " " + text
 	}
-	payload := fmt.Sprintf(`{"msg_type":"text","content":{"text":%q}}`, text)
+	// 测试消息按渠道类型直接构造样例消息体；AtAll 由 Sender 层注入
+	payload, err := testSamplePayload(ch.Type, text)
+	if err != nil {
+		return nil, err
+	}
 	start := time.Now()
-	res := s.sender.Send(ctx, ch, []byte(payload))
+	res := s.sender.Send(ctx, ch, payload)
 	return &TestSendResult{
 		Success:    res.Success(),
 		HTTPStatus: res.HTTPStatus,
@@ -248,7 +278,32 @@ func (s *ChannelService) TestSend(ctx context.Context, id int64) (*TestSendResul
 	}, nil
 }
 
-func (s *ChannelService) checkTemplate(ctx context.Context, templateID *int64) error {
+// testSamplePayload 为测试发送构造指定渠道类型的样例消息体
+func testSamplePayload(chType, text string) ([]byte, error) {
+	var payload map[string]any
+	switch chType {
+	case model.ChannelTypeFeishu:
+		payload = map[string]any{
+			"msg_type": "text",
+			"content":  map[string]any{"text": text},
+		}
+	case model.ChannelTypeDingTalk:
+		payload = map[string]any{
+			"msgtype":  "markdown",
+			"markdown": map[string]any{"title": "烽火台测试消息", "text": text},
+		}
+	case model.ChannelTypeWeCom:
+		payload = map[string]any{
+			"msgtype":  "markdown",
+			"markdown": map[string]any{"content": text},
+		}
+	default:
+		return nil, validationErr("unsupported channel type %q", chType)
+	}
+	return json.Marshal(payload) // map[string]any 序列化不会失败
+}
+
+func (s *ChannelService) checkTemplate(ctx context.Context, chType string, templateID *int64) error {
 	if templateID == nil {
 		return nil
 	}
@@ -258,6 +313,10 @@ func (s *ChannelService) checkTemplate(ctx context.Context, templateID *int64) e
 	}
 	if tmpl == nil {
 		return validationErr("template %d does not exist", *templateID)
+	}
+	// 模板按渠道类型归属，只能绑定与渠道类型一致的模板
+	if tmpl.ChannelType != chType {
+		return validationErr("template %d is for %s channels, not %s", *templateID, tmpl.ChannelType, chType)
 	}
 	return nil
 }

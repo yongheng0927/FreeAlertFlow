@@ -133,9 +133,10 @@ func (h *TemplateHandler) Delete(c *gin.Context) {
 }
 
 type templatePreviewRequest struct {
-	Content    string          `json:"content"`
-	TemplateID *int64          `json:"template_id"`
-	Alert      json.RawMessage `json:"alert"` // 可选的 Alertmanager v4 负载
+	Content     string          `json:"content"`
+	ChannelType string          `json:"channel_type"` // content 直传时缺省 feishu
+	TemplateID  *int64          `json:"template_id"`
+	Alert       json.RawMessage `json:"alert"` // 可选的 Alertmanager v4 负载
 }
 
 // Preview 处理 POST /api/v1/templates/preview（FR-2.3 在线预览）
@@ -146,6 +147,7 @@ func (h *TemplateHandler) Preview(c *gin.Context) {
 		return
 	}
 	content := req.Content
+	channelType := req.ChannelType
 	if content == "" && req.TemplateID != nil {
 		tmpl, err := h.templates.FindByID(c.Request.Context(), *req.TemplateID)
 		if err != nil {
@@ -157,15 +159,21 @@ func (h *TemplateHandler) Preview(c *gin.Context) {
 			return
 		}
 		content = tmpl.Content
+		// 用 template_id 时以模板自己的渠道类型校验
+		channelType = tmpl.ChannelType
 	}
 	if content == "" {
 		fail(c, http.StatusBadRequest, "content or template_id is required")
 		return
 	}
-	rendered, err := h.svc.Preview(c.Request.Context(), content, req.Alert)
+	if channelType == "" {
+		channelType = model.ChannelTypeFeishu
+	}
+	rendered, err := h.svc.Preview(c.Request.Context(), content, channelType, req.Alert)
 	if err != nil {
 		serviceError(c, err)
 		return
 	}
+	// 与前端约定的契约：rendered 是渲染出的渠道消息体 JSON 字符串
 	c.JSON(http.StatusOK, gin.H{"rendered": rendered})
 }

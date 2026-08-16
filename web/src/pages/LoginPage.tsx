@@ -63,7 +63,7 @@ export default function LoginPage() {
             烽火台
           </Typography.Title>
           <Typography.Text type="secondary">
-            自托管告警转发中台 · Alertmanager → 飞书
+            自托管告警转发中台 · Alertmanager → 飞书 / 钉钉 / 企业微信
           </Typography.Text>
         </div>
         {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} />}

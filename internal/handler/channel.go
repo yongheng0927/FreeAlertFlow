@@ -64,6 +64,7 @@ func (h *ChannelHandler) Get(c *gin.Context) {
 
 type channelCreateRequest struct {
 	Name       string `json:"name" binding:"required"`
+	Type       string `json:"type"` // feishu / dingtalk / wecom；空 = feishu
 	WebhookURL string `json:"webhook_url" binding:"required"`
 	Secret     string `json:"secret"`
 	Keyword    string `json:"keyword"`
@@ -85,6 +86,7 @@ func (h *ChannelHandler) Create(c *gin.Context) {
 	}
 	ch, err := h.svc.Create(c.Request.Context(), service.ChannelInput{
 		Name:       req.Name,
+		Type:       req.Type,
 		WebhookURL: req.WebhookURL,
 		Keyword:    req.Keyword,
 		TemplateID: req.TemplateID,

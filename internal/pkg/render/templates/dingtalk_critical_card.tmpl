@@ -1,0 +1,7 @@
+{
+  "msgtype": "markdown",
+  "markdown": {
+    "title": "🔥 [{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}",
+    "text": "## 🔥 [{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}\n\n- **级别**：{{ label .CommonLabels "severity" | jesc }}\n- **状态**：{{ jesc .Status }}\n- **来源**：{{ jesc .SourceName }}\n- **告警条数**：{{ len .Alerts }}\n{{ range $a := .Alerts }}\n---\n\n**实例**：{{ label $a.Labels "instance" | jesc }}\n\n**开始时间**：{{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n\n{{ label $a.Annotations "summary" | truncate 200 | jesc }}\n{{ end }}"
+  }
+}

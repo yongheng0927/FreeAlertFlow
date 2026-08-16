@@ -1,0 +1,6 @@
+{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "## ✅ [RESOLVED] {{ label .CommonLabels "alertname" | jesc }}\n> **级别**：{{ label .CommonLabels "severity" | jesc }}\n> **来源**：{{ jesc .SourceName }}\n> **告警条数**：{{ len .Alerts }}{{ range $a := .Alerts }}\n\n**实例**：{{ label $a.Labels "instance" | jesc }}\n**开始时间**：{{ timeFormat "2006-01-02 15:04:05" $a.StartsAt }}\n**恢复时间**：{{ timeFormat "2006-01-02 15:04:05" $a.EndsAt }}{{ end }}"
+  }
+}

@@ -77,12 +77,19 @@ export interface TestSendResult {
 export interface Template {
   id: number
   name: string
+  /** 模板归属的渠道类型：feishu / dingtalk / wecom 三选一；内容为该渠道消息 payload 的 Go template */
   channel_type: string
   content: string
   is_builtin: boolean
   remark: string
   created_at: string
   updated_at: string
+}
+
+/** POST /v1/templates/preview 的响应 */
+export interface TemplatePreview {
+  /** 渲染出的渠道消息体 JSON 字符串 */
+  rendered: string
 }
 
 export interface RoutingRule {

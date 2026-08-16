@@ -68,7 +68,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	sender := service.NewFeishuSender(cipher, cfg.Channel.HTTPTimeout)
+	sender := service.NewDispatcher(
+		service.NewFeishuSender(cipher, cfg.Channel.HTTPTimeout),
+		service.NewDingTalkSender(cipher, cfg.Channel.HTTPTimeout),
+		service.NewWeComSender(cipher, cfg.Channel.HTTPTimeout),
+	)
 	renderEngine := render.NewEngine(nil)
 	deliverer := service.NewDeliverer(
 		templateStore, deliveryStore, alertStore, channelStore, sourceStore,

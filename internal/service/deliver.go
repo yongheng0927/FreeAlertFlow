@@ -113,18 +113,22 @@ func (d *Deliverer) deliver(ctx context.Context, alert *model.Alert, msg *AMWebh
 	}
 
 	rctx := buildRenderContext(msg, sourceName, d.rootURL)
-	payload, err := d.engine.Render(tmpl.Content, rctx)
+	// 模板渲染出该渠道的完整消息体（渲染结果按渠道类型校验）
+	payloadStr, err := d.engine.Render(tmpl.Content, rctx, ch.Type)
 	if err != nil {
 		return d.record(alert, ch, ruleID, triggerType, 1, start,
 			SendResult{Code: -1, Msg: "render error: " + err.Error()}, nil)
 	}
 
-	if ch.Keyword != "" && !strings.Contains(payload, ch.Keyword) {
+	// 关键词检查对三家渠道通用：渲染出的消息体必须包含渠道关键词
+	if ch.Keyword != "" && !strings.Contains(payloadStr, ch.Keyword) {
 		return d.record(alert, ch, ruleID, triggerType, 1, start, SendResult{
 			Code: -1,
 			Msg:  fmt.Sprintf("rendered message does not contain the required keyword %q", ch.Keyword),
-		}, &payload)
+		}, &payloadStr)
 	}
+
+	payload := []byte(payloadStr)
 
 	// 有界原地重试（FR-2.4）：首次尝试 + 最多 retryMax 次重试，仅针对
 	// 瞬时错误，明确的业务错误不重试
@@ -132,13 +136,13 @@ func (d *Deliverer) deliver(ctx context.Context, alert *model.Alert, msg *AMWebh
 	attempts := 0
 	for {
 		attempts++
-		res = d.sender.Send(ctx, ch, []byte(payload))
+		res = d.sender.Send(ctx, ch, payload)
 		if res.Success() || !res.Retryable() || attempts > d.retryMax {
 			break
 		}
 		time.Sleep(d.backoff(attempts))
 	}
-	return d.record(alert, ch, ruleID, triggerType, attempts, start, res, &payload)
+	return d.record(alert, ch, ruleID, triggerType, attempts, start, res, &payloadStr)
 }
 
 // backoff 返回第 n 次尝试之后、下一次尝试之前的等待时长
@@ -150,8 +154,8 @@ func (d *Deliverer) backoff(attempts int) time.Duration {
 	return d.backoffs[i]
 }
 
-// resolveTemplate 选取渠道绑定的模板，未绑定时用该渠道类型的内置默认
-// 模板（FR-2.1/FR-2.3）
+// resolveTemplate 选取渠道绑定的模板，未绑定时用该渠道类型的内置默认模板
+// （FR-2.1/FR-2.3）
 func (d *Deliverer) resolveTemplate(ctx context.Context, msg *AMWebhook, ch *model.Channel) (*model.Template, error) {
 	if ch.TemplateID != nil {
 		tmpl, err := d.templates.FindByID(ctx, *ch.TemplateID)

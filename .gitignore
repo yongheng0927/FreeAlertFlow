@@ -21,7 +21,7 @@ config.yaml
 .tools/
 
 # helm
-deploy/helm
+deploy/
 
 # 本地部署配置（模板见 docker-compose.example.yaml）
 /docker-compose.yaml

@@ -1,7 +1,6 @@
 package render
 
 import (
-	"encoding/json"
 	"os"
 	"regexp"
 	"strings"
@@ -49,116 +48,134 @@ func sampleContext() *Context {
 }
 
 // TestBuiltinTemplatesRender 检查每个内置模板都能把示例 Alertmanager v4
-// 负载渲染成合法的飞书消息体
+// 负载渲染成通过本渠道校验的消息体，且包含关键告警信息
 func TestBuiltinTemplatesRender(t *testing.T) {
 	builtins, err := BuiltinTemplates()
 	if err != nil {
 		t.Fatalf("BuiltinTemplates: %v", err)
 	}
-	if len(builtins) != 4 {
-		t.Fatalf("got %d builtin templates, want 4", len(builtins))
+	if len(builtins) != 4*len(BuiltinChannelTypes) {
+		t.Fatalf("got %d builtin templates, want %d", len(builtins), 4*len(BuiltinChannelTypes))
+	}
+	validType := map[string]bool{}
+	for _, ct := range BuiltinChannelTypes {
+		validType[ct] = true
 	}
 	engine := NewEngine(time.UTC)
 	for _, b := range builtins {
+		if !validType[b.ChannelType] {
+			t.Errorf("%s/%s: unknown channel type", b.Name, b.ChannelType)
+			continue
+		}
 		ctx := sampleContext()
 		if b.Name == "resolved-card" {
 			ctx.Status = "resolved"
 			ctx.Alerts[0].Status = "resolved"
 			ctx.Alerts[0].EndsAt = time.Date(2026, 8, 15, 2, 30, 0, 0, time.UTC)
 		}
-		out, err := engine.Render(b.Content, ctx)
+		// Render 内部已按渠道类型校验 payload（合法 JSON + 消息类型字段）
+		out, err := engine.Render(b.Content, ctx, b.ChannelType)
 		if err != nil {
-			t.Errorf("%s: Render: %v", b.Name, err)
+			t.Errorf("%s/%s: Render: %v", b.Name, b.ChannelType, err)
 			continue
 		}
-		var body map[string]any
-		if err := json.Unmarshal([]byte(out), &body); err != nil {
-			t.Errorf("%s: result is not valid JSON: %v", b.Name, err)
-			continue
+		for _, want := range []string{"HighCPU", "critical", "10.0.0.1:9100"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%s/%s: rendered payload lacks %q:\n%s", b.Name, b.ChannelType, want, out)
+			}
 		}
-		switch body["msg_type"] {
-		case "interactive":
-			card, ok := body["card"].(map[string]any)
-			if !ok {
-				t.Errorf("%s: interactive message missing card", b.Name)
-			}
-			header, _ := card["header"].(map[string]any)
-			title, _ := header["title"].(map[string]any)
-			content, _ := title["content"].(string)
-			if !strings.Contains(content, "HighCPU") {
-				t.Errorf("%s: card title lacks alertname: %q", b.Name, content)
-			}
-		case "text":
-			c, _ := body["content"].(map[string]any)
-			text, _ := c["text"].(string)
-			if !strings.Contains(text, "HighCPU") {
-				t.Errorf("%s: text lacks alertname: %q", b.Name, text)
-			}
-		default:
-			t.Errorf("%s: unexpected msg_type %v", b.Name, body["msg_type"])
+		if b.Name == "resolved-card" && !strings.Contains(out, "2026-08-15 02:30:00") {
+			t.Errorf("resolved-card/%s: rendered payload lacks endsAt:\n%s", b.ChannelType, out)
 		}
 	}
 }
 
-// TestBuiltinTemplatesMatchMigration 强制保证内嵌 .tmpl 文件与迁移 0002
+// TestBuiltinTemplatesMatchMigration 强制保证内嵌 .tmpl 文件与迁移 0005
 // 写入的数据行内容一致
 func TestBuiltinTemplatesMatchMigration(t *testing.T) {
-	sql, err := os.ReadFile("../../../migrations/0002_builtin_templates.up.sql")
+	sql, err := os.ReadFile("../../../migrations/0005_channel_payload_templates.up.sql")
 	if err != nil {
 		t.Fatalf("read migration: %v", err)
 	}
-	re := regexp.MustCompile(`(?s)\('([^']+)', 'feishu', \$faf\$\n(.*?)\$faf\$, TRUE,`)
-	rows := map[string]string{}
+	re := regexp.MustCompile(`(?s)\('([^']+)', '([^']+)', \$faf\$\n(.*?)\$faf\$, TRUE,`)
+	type key struct{ name, channelType string }
+	rows := map[key]string{}
 	for _, m := range re.FindAllStringSubmatch(string(sql), -1) {
-		rows[m[1]] = strings.TrimSpace(m[2])
+		rows[key{m[1], m[2]}] = strings.TrimSpace(m[3])
 	}
 	builtins, err := BuiltinTemplates()
 	if err != nil {
 		t.Fatalf("BuiltinTemplates: %v", err)
 	}
 	for _, b := range builtins {
-		content, ok := rows[b.Name]
+		k := key{b.Name, b.ChannelType}
+		content, ok := rows[k]
 		if !ok {
-			t.Errorf("migration 0002 has no row for %q", b.Name)
+			t.Errorf("migration 0005 has no row for %q/%q", b.Name, b.ChannelType)
 			continue
 		}
 		if content != strings.TrimSpace(b.Content) {
-			t.Errorf("migration 0002 content of %q differs from embedded template", b.Name)
+			t.Errorf("migration 0005 content of %q/%q differs from embedded template", b.Name, b.ChannelType)
 		}
-		delete(rows, b.Name)
+		delete(rows, k)
 	}
-	for name := range rows {
-		t.Errorf("migration 0002 row %q has no embedded template", name)
+	for k := range rows {
+		t.Errorf("migration 0005 row %q/%q has no embedded template", k.name, k.channelType)
 	}
 }
 
 func TestRenderRejectsBadTemplate(t *testing.T) {
 	engine := NewEngine(nil)
-	if _, err := engine.Render("{{ .NoSuchField", sampleContext()); err == nil {
+	if _, err := engine.Render("{{ .NoSuchField", sampleContext(), "feishu"); err == nil {
 		t.Fatal("unparsable template must fail")
 	}
-	if _, err := engine.Render("not json at all", sampleContext()); err == nil {
-		t.Fatal("non-JSON result must fail validation")
+	// 渲染结果必须是合法 JSON
+	if _, err := engine.Render("not json at all", sampleContext(), "feishu"); err == nil {
+		t.Fatal("non-JSON result must fail")
 	}
-	if _, err := engine.Render(`{"foo": "bar"}`, sampleContext()); err == nil {
-		t.Fatal("JSON without msg_type must fail validation")
+}
+
+// TestValidatePayloadJSON 按渠道类型校验渲染结果的消息类型字段
+func TestValidatePayloadJSON(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		chType  string
+		wantErr bool
+	}{
+		{"feishu text", `{"msg_type":"text","content":{"text":"hi"}}`, "feishu", false},
+		{"feishu card", `{"msg_type":"interactive","card":{}}`, "feishu", false},
+		{"feishu bad msg_type", `{"msg_type":"audio"}`, "feishu", true},
+		{"feishu missing msg_type", `{"content":{}}`, "feishu", true},
+		{"feishu dingtalk key mismatch", `{"msgtype":"markdown"}`, "feishu", true},
+		{"dingtalk markdown", `{"msgtype":"markdown","markdown":{"title":"t","text":"x"}}`, "dingtalk", false},
+		{"dingtalk text", `{"msgtype":"text","text":{"content":"x"}}`, "dingtalk", false},
+		{"dingtalk interactive not allowed", `{"msg_type":"interactive"}`, "dingtalk", true},
+		{"dingtalk actionCard not allowed", `{"msgtype":"actionCard"}`, "dingtalk", true},
+		{"wecom markdown", `{"msgtype":"markdown","markdown":{"content":"x"}}`, "wecom", false},
+		{"wecom image not allowed", `{"msgtype":"image"}`, "wecom", true},
+		{"unknown channel type", `{"msg_type":"text"}`, "slack", true},
+		{"invalid json", `not json`, "feishu", true},
 	}
-	if _, err := engine.Render(`{"msg_type": "video"}`, sampleContext()); err == nil {
-		t.Fatal("illegal msg_type must fail validation")
+	for _, tc := range cases {
+		err := ValidatePayloadJSON(tc.payload, tc.chType)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%s: ValidatePayloadJSON err = %v, wantErr = %v", tc.name, err, tc.wantErr)
+		}
 	}
 }
 
 func TestCustomFuncs(t *testing.T) {
 	engine := NewEngine(time.UTC)
 
-	if got := severityColor("critical"); got != "red" {
-		t.Errorf("severityColor(critical) = %q", got)
+	if got := SeverityColor("critical"); got != "red" {
+		t.Errorf("SeverityColor(critical) = %q", got)
 	}
-	if got := severityColor("warning"); got != "orange" {
-		t.Errorf("severityColor(warning) = %q", got)
+	if got := SeverityColor("warning"); got != "orange" {
+		t.Errorf("SeverityColor(warning) = %q", got)
 	}
-	if got := severityColor("info"); got != "blue" {
-		t.Errorf("severityColor(info) = %q", got)
+	if got := SeverityColor("info"); got != "blue" {
+		t.Errorf("SeverityColor(info) = %q", got)
 	}
 
 	ts := time.Date(2026, 8, 15, 12, 30, 45, 0, time.UTC)
@@ -180,31 +197,11 @@ func TestCustomFuncs(t *testing.T) {
 		t.Errorf("truncate runes = %q", got)
 	}
 
-	if got := mdEscape("a*b_[x]"); got != `a\*b\_\[x\]` {
+	if got := jsonEscape(`he"llo
+world`); got != `he\"llo\nworld` {
+		t.Errorf("jesc = %q", got)
+	}
+	if got := mdEscape("a*b_c`d[e]\\f"); got != "a\\*b\\_c\\`d\\[e\\]\\\\f" {
 		t.Errorf("mdEscape = %q", got)
-	}
-
-	if got := jsonEscape(`say "hi"`); got != `say \"hi\"` {
-		t.Errorf("jsonEscape = %q", got)
-	}
-}
-
-// TestJSONInjectionEscaped 确保模板使用 jesc 时，恶意的标签值无法破坏
-// 渲染出的 JSON
-func TestJSONInjectionEscaped(t *testing.T) {
-	engine := NewEngine(time.UTC)
-	ctx := sampleContext()
-	ctx.CommonLabels["alertname"] = "evil\"}\n{\"msg_type\":\"x"
-	out, err := engine.Render(`{"msg_type":"text","content":{"text":"{{ label .CommonLabels "alertname" | jesc }}"}}`, ctx)
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	var body map[string]any
-	if err := json.Unmarshal([]byte(out), &body); err != nil {
-		t.Fatalf("result must remain valid JSON: %v", err)
-	}
-	text := body["content"].(map[string]any)["text"].(string)
-	if text != "evil\"}\n{\"msg_type\":\"x" {
-		t.Fatalf("escaping changed the value: %q", text)
 	}
 }

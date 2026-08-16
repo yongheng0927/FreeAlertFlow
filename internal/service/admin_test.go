@@ -156,7 +156,7 @@ func TestChannelCreateEncryptsCredentials(t *testing.T) {
 
 func TestChannelCreateValidation(t *testing.T) {
 	svc, _, _, _, _ := newChannelService(t)
-	if _, err := svc.Create(context.Background(), ChannelInput{Name: "", WebhookURL: "https://x/"}, ""); !errors.Is(err, ErrValidation) {
+	if _, err := svc.Create(context.Background(), ChannelInput{Name: "", WebhookURL: "https://open.feishu.cn/hook/x"}, ""); !errors.Is(err, ErrValidation) {
 		t.Fatalf("empty name: %v", err)
 	}
 	if _, err := svc.Create(context.Background(), ChannelInput{Name: "a"}, ""); !errors.Is(err, ErrValidation) {
@@ -165,12 +165,48 @@ func TestChannelCreateValidation(t *testing.T) {
 	if _, err := svc.Create(context.Background(), ChannelInput{Name: "a", WebhookURL: "ftp://bad"}, ""); !errors.Is(err, ErrValidation) {
 		t.Fatalf("bad scheme: %v", err)
 	}
-	if _, err := svc.Create(context.Background(), ChannelInput{Name: "a", WebhookURL: "https://x/", TemplateID: int64Ptr(999)}, ""); !errors.Is(err, ErrValidation) {
+	if _, err := svc.Create(context.Background(), ChannelInput{Name: "a", Type: "slack", WebhookURL: "https://open.feishu.cn/hook/x"}, ""); !errors.Is(err, ErrValidation) {
+		t.Fatalf("bad channel type: %v", err)
+	}
+	if _, err := svc.Create(context.Background(), ChannelInput{Name: "a", WebhookURL: "https://example.com/hook/x"}, ""); !errors.Is(err, ErrValidation) {
+		t.Fatalf("wrong host for feishu: %v", err)
+	}
+	if _, err := svc.Create(context.Background(), ChannelInput{Name: "a", WebhookURL: "https://open.feishu.cn/hook/x", TemplateID: int64Ptr(999)}, ""); !errors.Is(err, ErrValidation) {
 		t.Fatalf("missing template: %v", err)
 	}
-	_, _ = svc.Create(context.Background(), ChannelInput{Name: "dup", WebhookURL: "https://x/"}, "")
-	if _, err := svc.Create(context.Background(), ChannelInput{Name: "dup", WebhookURL: "https://x/"}, ""); !errors.Is(err, ErrDuplicateName) {
+	_, _ = svc.Create(context.Background(), ChannelInput{Name: "dup", WebhookURL: "https://open.feishu.cn/hook/x"}, "")
+	if _, err := svc.Create(context.Background(), ChannelInput{Name: "dup", WebhookURL: "https://open.feishu.cn/hook/x"}, ""); !errors.Is(err, ErrDuplicateName) {
 		t.Fatalf("dup name: %v", err)
+	}
+}
+
+func TestChannelCreateDingTalkAndWeCom(t *testing.T) {
+	svc, channels, _, _, _ := newChannelService(t)
+	dt, err := svc.Create(context.Background(), ChannelInput{
+		Name: "钉钉群", Type: "dingtalk",
+		WebhookURL: "https://oapi.dingtalk.com/robot/send?access_token=abc",
+		Enabled:    true,
+	}, "SECdingsecret")
+	if err != nil {
+		t.Fatalf("Create dingtalk: %v", err)
+	}
+	if dt.Type != "dingtalk" {
+		t.Errorf("type = %q", dt.Type)
+	}
+	if channels.byID[dt.ID].SecretEncrypted == nil {
+		t.Error("dingtalk secret must be stored (sign supported)")
+	}
+
+	wc, err := svc.Create(context.Background(), ChannelInput{
+		Name: "企微群", Type: "wecom",
+		WebhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc",
+		Enabled:    true,
+	}, "ignored-secret")
+	if err != nil {
+		t.Fatalf("Create wecom: %v", err)
+	}
+	if channels.byID[wc.ID].SecretEncrypted != nil {
+		t.Error("wecom has no sign mechanism; secret must be ignored")
 	}
 }
 
@@ -216,13 +252,19 @@ func TestChannelUpdateTemplateBinding(t *testing.T) {
 		Name: "值班群", WebhookURL: "https://open.feishu.cn/hook/aaaabbbb", Enabled: true,
 	}, "")
 	templates.byID[9] = &model.Template{ID: 9, ChannelType: "feishu", Name: "custom",
-		Content: `{"msg_type":"text","content":{"text":"x"}}`}
+		Content: `**x**`}
+	templates.byID[10] = &model.Template{ID: 10, ChannelType: "dingtalk", Name: "dt",
+		Content: `**x**`}
 
 	if _, err := svc.Update(context.Background(), ch.ID, ChannelPatch{TemplateID: int64Ptr(9)}); err != nil {
 		t.Fatalf("bind template: %v", err)
 	}
 	if _, err := svc.Update(context.Background(), ch.ID, ChannelPatch{TemplateID: int64Ptr(999)}); !errors.Is(err, ErrValidation) {
 		t.Fatalf("bind missing template: %v", err)
+	}
+	// 模板渠道类型与渠道类型不一致时必须拒绝
+	if _, err := svc.Update(context.Background(), ch.ID, ChannelPatch{TemplateID: int64Ptr(10)}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("bind cross-type template: %v", err)
 	}
 	updated, _ := svc.Update(context.Background(), ch.ID, ChannelPatch{ClearTemplate: true})
 	if updated.TemplateID != nil {
@@ -271,7 +313,7 @@ func TestChannelTestSend(t *testing.T) {
 
 // --- TemplateService ---
 
-const validTemplateContent = `{"msg_type":"text","content":{"text":"{{ label .CommonLabels "alertname" }}"}}`
+const validTemplateContent = `{"msg_type":"text","content":{"text":"**{{ label .CommonLabels "alertname" | jesc }}**"}}`
 
 func newTemplateService(t *testing.T) (*TemplateService, *fakeTemplateStore, *fakeChannelStore, *fakeAlertStore) {
 	t.Helper()
@@ -295,11 +337,9 @@ func TestTemplateCreateValidation(t *testing.T) {
 
 	bad := []TemplateInput{
 		{Name: "", ChannelType: "feishu", Content: validTemplateContent},
-		{Name: "x", ChannelType: "wecom", Content: validTemplateContent},
+		{Name: "x", ChannelType: "common", Content: validTemplateContent}, // channel_type 只能 feishu/dingtalk/wecom
 		{Name: "x", ChannelType: "feishu", Content: ""},
 		{Name: "x", ChannelType: "feishu", Content: "{{ .Bogus"},
-		{Name: "x", ChannelType: "feishu", Content: "not json"},
-		{Name: "x", ChannelType: "feishu", Content: `{"msg_type":"video"}`},
 	}
 	for i, in := range bad {
 		if _, err := svc.Create(context.Background(), in); !errors.Is(err, ErrValidation) {
@@ -346,12 +386,21 @@ func TestTemplateDeleteGuard(t *testing.T) {
 func TestTemplatePreviewFallbacks(t *testing.T) {
 	svc, _, _, alerts := newTemplateService(t)
 	ctx := context.Background()
+	tmpl := `{"msg_type":"text","content":{"text":"**{{ label .CommonLabels "alertname" | jesc }}**"}}`
 
-	// 1. 显式给的告警 JSON 优先
-	out, err := svc.Preview(ctx, `{"msg_type":"text","content":{"text":"{{ label .CommonLabels "alertname" }}"}}`,
-		[]byte(sampleWebhookJSON))
-	if err != nil || !strings.Contains(out, "HighCPU") {
-		t.Fatalf("explicit payload: out=%q err=%v", out, err)
+	// 1. 显式给的告警 JSON 优先；rendered 是该渠道的消息体 JSON 字符串
+	rendered, err := svc.Preview(ctx, tmpl, "feishu", []byte(sampleWebhookJSON))
+	if err != nil || !strings.Contains(rendered, "HighCPU") {
+		t.Fatalf("explicit payload: rendered=%q err=%v", rendered, err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(rendered), &m); err != nil || m["msg_type"] != "text" {
+		t.Fatalf("rendered must be a feishu payload: %q err=%v", rendered, err)
+	}
+
+	// 按渠道类型校验：飞书 payload 用 dingtalk 类型预览必须失败
+	if _, err := svc.Preview(ctx, tmpl, "dingtalk", []byte(sampleWebhookJSON)); err == nil {
+		t.Fatal("feishu payload must not pass dingtalk validation")
 	}
 
 	// 2. 没带告警 JSON：用最近一条入库告警
@@ -359,24 +408,27 @@ func TestTemplatePreviewFallbacks(t *testing.T) {
 	_ = alerts.Create(ctx, &model.Alert{
 		SourceID: 1, ReceivedAt: time.Now(), RawPayload: json.RawMessage(stored),
 	})
-	out, err = svc.Preview(ctx, `{"msg_type":"text","content":{"text":"{{ label .CommonLabels "alertname" }}"}}`, nil)
-	if err != nil || !strings.Contains(out, "StoredAlert") {
-		t.Fatalf("latest stored alert: out=%q err=%v", out, err)
+	rendered, err = svc.Preview(ctx, tmpl, "feishu", nil)
+	if err != nil || !strings.Contains(rendered, "StoredAlert") {
+		t.Fatalf("latest stored alert: rendered=%q err=%v", rendered, err)
 	}
 
 	// 3. store 为空：用内置样例
 	alerts.byID = map[int64]*model.Alert{}
-	out, err = svc.Preview(ctx, `{"msg_type":"text","content":{"text":"{{ label .CommonLabels "alertname" }}"}}`, nil)
-	if err != nil || !strings.Contains(out, "HighCPU") {
-		t.Fatalf("builtin sample: out=%q err=%v", out, err)
+	rendered, err = svc.Preview(ctx, tmpl, "feishu", nil)
+	if err != nil || !strings.Contains(rendered, "HighCPU") {
+		t.Fatalf("builtin sample: rendered=%q err=%v", rendered, err)
 	}
 
-	// 4. 渲染错误要带出详细信息
-	if _, err := svc.Preview(ctx, "{{ .Bogus", nil); err == nil {
+	// 4. 渲染错误、空内容、非法渠道类型都要报错
+	if _, err := svc.Preview(ctx, "{{ .Bogus", "feishu", nil); err == nil {
 		t.Fatal("syntax error must fail")
 	}
-	if _, err := svc.Preview(ctx, "", nil); !errors.Is(err, ErrValidation) {
+	if _, err := svc.Preview(ctx, "", "feishu", nil); !errors.Is(err, ErrValidation) {
 		t.Fatalf("empty content: err = %v", err)
+	}
+	if _, err := svc.Preview(ctx, tmpl, "slack", nil); !errors.Is(err, ErrValidation) {
+		t.Fatalf("bad channel type: err = %v", err)
 	}
 }
 

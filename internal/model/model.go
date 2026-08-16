@@ -15,6 +15,13 @@ const (
 	RoleAdmin  = "admin"
 )
 
+// 通知渠道类型取值（channels.type，VARCHAR 语义枚举，在应用层校验）
+const (
+	ChannelTypeFeishu   = "feishu"   // 飞书自定义机器人
+	ChannelTypeDingTalk = "dingtalk" // 钉钉自定义机器人
+	ChannelTypeWeCom    = "wecom"    // 企业微信群机器人
+)
+
 // User 是本地账号（users 表）
 type User struct {
 	ID           int64      `gorm:"primaryKey;autoIncrement"`
@@ -94,7 +101,7 @@ func (Template) TableName() string { return "templates" }
 type Channel struct {
 	ID                  int64            `gorm:"primaryKey;autoIncrement"`
 	Name                string           `gorm:"column:name"`
-	Type                string           `gorm:"column:type"`                  // V1 中为 "feishu"
+	Type                string           `gorm:"column:type"`                  // feishu / dingtalk / wecom
 	WebhookURLEncrypted []byte           `gorm:"column:webhook_url_encrypted"` // AES-GCM 密文
 	SecretEncrypted     *[]byte          `gorm:"column:secret_encrypted"`      // NULL = 不启用签名校验
 	Keyword             string           `gorm:"column:keyword"`

@@ -76,37 +76,37 @@
 |---|---|---|---|
 | id | BIGINT | PK | |
 | name | VARCHAR(128) | NOT NULL | 模板名（同一 channel_type 下唯一） |
-| channel_type | VARCHAR(16) | NOT NULL | `feishu`（预留 `wecom`/`dingtalk`），模板与渠道类型强绑定（卡片结构不同） |
-| content | TEXT | NOT NULL | Go template 文本，渲染结果必须是合法飞书消息体 JSON |
+| channel_type | VARCHAR(16) | NOT NULL | 模板归属的渠道类型：feishu / dingtalk / wecom 三选一；内容即该渠道的消息 payload 模板 |
+| content | TEXT | NOT NULL | 渠道消息 payload 的 Go template 文本，渲染结果就是直接发送的消息体（按渠道类型校验 JSON 与 msg_type/msgtype） |
 | is_builtin | BOOLEAN | NOT NULL DEFAULT FALSE | TRUE=内置模板（只读可复制，不可改不可删） |
 | remark | VARCHAR(255) | NOT NULL DEFAULT '' | |
 
 **UNIQUE KEY `(channel_type, name)`**
 
 说明：
-- `is_builtin=TRUE` 的模板由迁移脚本写入，作为新用户的起点和兜底
-- 渲染校验（是否合法飞书消息 JSON）在应用层做，不入库
+- `is_builtin=TRUE` 的模板由迁移脚本写入（迁移 0005 起为按渠道类型编写的 payload 模板，4 个模板名 × 3 渠道 = 12 条），作为新用户的起点和兜底
+- 渲染校验（能否用样例上下文渲染出本渠道的合法消息体 JSON）在应用层做，不入库
 
-## 6. channels — 通知渠道（飞书机器人）
+## 6. channels — 通知渠道（飞书/钉钉/企业微信机器人）
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
 | id | BIGINT | PK | |
 | name | VARCHAR(128) | NOT NULL, UNIQUE | 渠道名 |
-| type | VARCHAR(16) | NOT NULL DEFAULT 'feishu' | V1 恒为 `feishu` |
+| type | VARCHAR(16) | NOT NULL DEFAULT 'feishu' | `feishu` / `dingtalk` / `wecom` |
 | webhook_url_encrypted | BYTEA | NOT NULL | 机器人 webhook 完整地址，AES-GCM 加密存储（URL 内含机器人 token，泄露=任何人可向群内发消息，与 secret 同等敏感） |
-| secret_encrypted | BYTEA | NULL | 加签密钥，AES-GCM 加密存储；NULL=未开启签名校验 |
-| keyword | VARCHAR(64) | NOT NULL DEFAULT '' | 飞书关键词安全设置（发送内容必须包含） |
-| template_id | BIGINT | NULL, INDEX | 绑定模板；NULL=该类型内置默认模板 |
-| at_all | BOOLEAN | NOT NULL DEFAULT FALSE | 是否 @所有人（三家 IM 通用语义） |
-| extra | JSONB | NULL | 平台特有配置兜底：V1（飞书）用不到；企业微信的 mentioned_list、钉钉的 atMobiles 等进这里，扩展新平台大概率零 DDL |
+| secret_encrypted | BYTEA | NULL | 加签密钥，AES-GCM 加密存储；NULL=未开启签名校验（wecom 无加签机制，恒为 NULL） |
+| keyword | VARCHAR(64) | NOT NULL DEFAULT '' | 机器人关键词安全设置（发送内容必须包含） |
+| template_id | BIGINT | NULL, INDEX | 绑定模板；NULL=内置默认模板 |
+| at_all | BOOLEAN | NOT NULL DEFAULT FALSE | 是否 @所有人（飞书/钉钉生效；企微 markdown 不支持 @，忽略） |
+| extra | JSONB | NULL | 平台特有配置兜底：企业微信的 mentioned_list、钉钉的 atMobiles 等进这里，扩展新平台大概率零 DDL |
 | enabled | BOOLEAN | NOT NULL DEFAULT TRUE | |
 
 说明：
 - 加密列用 `BYTEA`：AES-GCM 输出是二进制（nonce+ciphertext），存二进制避免 base64 转换歧义
 - webhook_url 与 secret 都是「可逆但必须保密」的凭证（secret 需还原用于签名，URL 需还原用于发请求），敏感度同级，统一加密存储；接口返回脱敏（仅显示域名 + hook ID 尾 4 位），编辑时不重新提交则保持原值
-- `msg_type`（卡片/富文本）不放渠道上——由绑定的模板决定（模板渲染结果即完整飞书消息体 JSON，含 `msg_type`）
-- **扩展性验证（V2/V3 新平台）**：type/webhook_url/secret/keyword/at_all 五列对企业微信、钉钉通用（钉钉同样有加签+关键词，企业微信仅 key）；平台特有配置（@指定人列表等）进 `extra` JSONB，不改表结构
+- 消息形态（飞书互动卡片 / 钉钉与企微 markdown）不放渠道上——由所绑定的模板内容决定（模板按渠道类型编写完整消息 payload）
+- **扩展性验证（新平台）**：type/webhook_url/secret/keyword/at_all 五列对飞书、钉钉、企业微信通用（飞书/钉钉有加签+关键词，企业微信仅 key）；平台特有配置（@指定人列表等）进 `extra` JSONB，不改表结构
 
 ## 7. routing_rules — 路由规则
 
@@ -166,11 +166,11 @@
 | trigger_type | VARCHAR(16) | NOT NULL DEFAULT 'auto' | `auto`（路由自动投递）/ `manual`（管理员手动重发产生的新记录，FR-2.6） |
 | attempts | INT | NOT NULL DEFAULT 1 | 本条投递的尝试次数（有限重试，仅瞬时错误重试，FR-2.4） |
 | status | VARCHAR(16) | NOT NULL | `success` / `failed` |
-| http_status | INT | NOT NULL DEFAULT 0 | 飞书网关 HTTP 状态码 |
-| response_code | INT | NOT NULL DEFAULT 0 | 飞书业务 code（0=成功） |
-| response_msg | VARCHAR(512) | NOT NULL DEFAULT '' | 飞书返回 msg 或本地错误（超时/渲染失败等） |
+| http_status | INT | NOT NULL DEFAULT 0 | 渠道网关 HTTP 状态码 |
+| response_code | INT | NOT NULL DEFAULT 0 | 渠道业务 code（0=成功） |
+| response_msg | VARCHAR(512) | NOT NULL DEFAULT '' | 渠道返回消息或本地错误（超时/渲染失败等） |
 | duration_ms | INT | NOT NULL DEFAULT 0 | 投递耗时 |
-| rendered_payload | TEXT | NULL | 实际发送的消息体（模板渲染结果），排查模板问题用 |
+| rendered_payload | TEXT | NULL | 实际发送的消息体（模板渲染出的渠道 payload），排查模板问题用 |
 | sent_at | TIMESTAMPTZ | NOT NULL | |
 
 **INDEX `(status, sent_at)`**，**INDEX `(channel_id, sent_at)`**（告警列表按「渠道 + 时间范围」筛选时的 join 路径）
@@ -178,7 +178,7 @@
 说明：
 - 无重试队列、无状态机（已确认的边界：告警级重发是 Alertmanager 的职责）；有限重试在投递 goroutine 内原地完成，`attempts` 记录尝试次数，不产生额外行
 - 手动重发（FR-2.6）不修改原记录，而是插入一条 `trigger_type='manual'` 的新行，沿用原 `alert_id`/`channel_id`/`rule_id`，保留完整排查痕迹；渠道已删除时应用层拒绝重发
-- `rendered_payload` 只存一份最终发送体，TEXT 足够（飞书单消息上限 30KB 左右）
+- `rendered_payload` 只存一份最终发送体，TEXT 足够（各平台单消息上限 30KB 左右）
 
 ---
 

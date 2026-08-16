@@ -13,6 +13,7 @@ import type {
   Source,
   SystemInfo,
   Template,
+  TemplatePreview,
   TestSendResult,
   TokenPair,
   User,
@@ -87,6 +88,8 @@ export async function rotateSourceToken(id: number): Promise<Source> {
 // ---- 通知渠道 ----
 export interface ChannelCreateInput {
   name: string
+  /** feishu / dingtalk / wecom */
+  type: string
   webhook_url: string
   secret?: string
   keyword?: string
@@ -163,9 +166,12 @@ export async function deleteTemplate(id: number): Promise<void> {
   await api.delete(`/v1/templates/${id}`)
 }
 
-export async function previewTemplate(content: string): Promise<string> {
-  const { data } = await api.post<{ rendered: string }>('/v1/templates/preview', { content })
-  return data.rendered
+export async function previewTemplate(content: string, channelType: string): Promise<TemplatePreview> {
+  const { data } = await api.post<TemplatePreview>('/v1/templates/preview', {
+    content,
+    channel_type: channelType,
+  })
+  return data
 }
 
 // ---- 路由规则 ----

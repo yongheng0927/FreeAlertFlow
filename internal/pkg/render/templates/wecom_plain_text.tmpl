@@ -1,0 +1,6 @@
+{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "**[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}**\n> 级别：{{ label .CommonLabels "severity" | jesc }}　来源：{{ jesc .SourceName }}　告警条数：{{ len .Alerts }}{{ range .Alerts }}\n\n**实例**：{{ label .Labels "instance" | jesc }}　**开始**：{{ timeFormat "2006-01-02 15:04:05" .StartsAt }}\n{{ label .Annotations "summary" | truncate 200 | jesc }}{{ end }}"
+  }
+}

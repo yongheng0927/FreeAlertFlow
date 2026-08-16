@@ -18,7 +18,7 @@ Prometheus 生态中，Alertmanager 是事实标准的告警路由/通知组件�
 
 ### 1.2 项目定位
 
-烽火台（Fenghuo） 是一个**告警转发中台**：接收 Alertmanager 的 webhook 告警，经过模板封装后，转发到各类 IM 机器人。架构上按多 IM 平台设计，**V1 先完整支持飞书（含签名校验）**，后续版本扩展企业微信、钉钉。
+烽火台（Fenghuo） 是一个**告警转发中台**：接收 Alertmanager 的 webhook 告警，经过模板封装后，转发到各类 IM 机器人。V1 支持飞书自定义机器人（含签名校验）、钉钉自定义机器人（含加签）和企业微信群机器人。
 
 ### 1.3 目标用户
 
@@ -32,7 +32,7 @@ Prometheus 生态中，Alertmanager 是事实标准的告警路由/通知组件�
 ### 2.1 V1 目标（Must Have）
 
 1. 接收 Alertmanager webhook 告警（标准 v4 消息格式）。
-2. 告警模板化封装，转发至**飞书自定义机器人**，**完整支持签名校验（加签）模式**，同时兼容仅关键词/无安全设置模式。
+2. 告警模板化封装（按渠道类型编写的消息 payload Go template），转发至**飞书 / 钉钉 / 企业微信机器人**，飞书、钉钉**完整支持签名校验（加签）模式**，同时兼容仅关键词/无安全设置模式。
 3. 提供 Web 管理界面：机器人管理、告警记录、路由规则、用户登录。
 4. 支持通过环境变量配置 **Root URL**（类似 Grafana 的 `GF_SERVER_ROOT_URL`），便于反向代理/子路径部署。
 5. 支持 **飞书 OAuth2 授权登录**（扫码/网页授权）+ 本地账号 + JWT 认证。
@@ -86,20 +86,21 @@ POST /api/v1/alerts/webhook/:token
 - 「内容未变化」以对 `status + labels + annotations`（key 排序后）计算 SHA-256 得到的 `content_hash` 判定，入库时一并存储，避免每次比对完整 JSON。
 - 被去重的告警正常入库但 `disposition` 标记为 `deduped`，不产生投递记录；未命中任何路由规则的标记为 `unmatched`。告警列表可据此区分「没发出去」的原因。
 
-### 4.2 飞书渠道（Feishu Channel）— V1 核心
+### 4.2 通知渠道（飞书 / 钉钉 / 企业微信机器人）— V1 核心
 
-- [x] **FR-2.1** 机器人配置（CRUD），字段包括：
+- [x] **FR-2.1** 机器人配置（CRUD），渠道类型支持飞书自定义机器人（feishu）、钉钉自定义机器人（dingtalk）、企业微信群机器人（wecom），字段包括：
 
 | 字段 | 说明 |
 |---|---|
 | 名称 | 展示用 |
-| Webhook URL | `https://open.feishu.cn/open-apis/bot/v2/hook/xxx` |
-| 签名密钥 Secret | 可选；填写后启用加签 |
-| 关键词 | 可选；飞书关键词安全设置时，发送内容必须包含该关键词 |
-| 绑定模板 | 可选；未绑定时使用该渠道类型的内置默认模板 |
+| 渠道类型 | feishu / dingtalk / wecom |
+| Webhook URL | 飞书 `https://open.feishu.cn/open-apis/bot/v2/hook/xxx`；钉钉 `https://oapi.dingtalk.com/robot/send?access_token=xxx`；企微 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx` |
+| 签名密钥 Secret | 可选；飞书/钉钉填写后启用加签；企微无加签机制，忽略 |
+| 关键词 | 可选；机器人关键词安全设置时，发送内容必须包含该关键词 |
+| 绑定模板 | 可选；未绑定时使用内置默认模板 |
 | 是否启用 | 开关 |
 
-> 注：消息类型（互动卡片 interactive / 富文本 post）**不在渠道上配置**，由渠道绑定的模板决定——模板渲染结果即完整飞书消息体 JSON（含 `msg_type`）。Webhook URL 与签名密钥在接口返回值中均脱敏展示（仅显示尾部 4 位），编辑时不重新提交则保留原值。
+> 注：消息形态（飞书互动卡片 / 钉钉与企微 markdown 消息）**不在渠道上配置**，由模板内容决定——模板是按渠道类型编写的完整消息 payload 的 Go template，渲染结果就是直接发送的消息体。Webhook URL 与签名密钥在接口返回值中均脱敏展示（仅显示尾部 4 位），编辑时不重新提交则保留原值。
 
 - [x] **FR-2.2 签名校验（核心痛点）**：
 
@@ -107,17 +108,19 @@ POST /api/v1/alerts/webhook/:token
   - `stringToSign = timestamp + "\n" + secret`
   - `sign = Base64(HMAC-SHA256(key = stringToSign, data = ""))`（即以 `timestamp + "\n" + secret` 为 HMAC 密钥、空串为消息体）
 - 请求体携带 `timestamp` 与 `sign` 字段。
+- 钉钉加签按其官方算法：`sign = Base64(HMAC-SHA256(key = secret, data = timestamp(毫秒) + "\n" + secret))`，URL 编码后拼到 webhook URL 的 `timestamp`/`sign` 参数。
 - 签名密钥与 Webhook URL 在数据库中**均加密存储**（AES-GCM，密钥由环境变量 `FENGHUO_SECRET_KEY` 提供）：Webhook URL 内含机器人 token，泄露即等于任何人可向群内发消息，敏感度与 Secret 同级，故同等对待。接口返回值均脱敏（仅显示尾部 4 位）。
 
 - [x] **FR-2.3 消息模板封装（V1 核心亮点）**：
 
-- 内置若干基础模板（飞书卡片 critical/warning/resolved 三色、纯文本、富文本 post），开箱即用。
-- **支持用户自定义模板（Go `text/template` 语法）——本项目差异化亮点**：
-  - 模板管理（CRUD）：名称、渠道类型、模板内容、备注；一个渠道绑定一个模板，未绑定时用内置默认模板。
+- 内置若干基础模板（critical/warning/resolved、纯文本），开箱即用。
+- **支持用户自定义模板（Go `text/template` 语法，内容即渠道消息 payload）——本项目差异化亮点**：
+  - 模板管理（CRUD）：名称、渠道类型、模板内容、备注；模板按渠道类型归属（`channel_type` 为 feishu/dingtalk/wecom 三选一），一个渠道只能绑定同类型的模板，未绑定时用该渠道类型的内置默认模板。
+  - 模板内容是按渠道类型编写的完整消息 payload 的 Go template，渲染结果直接作为发送给机器人的消息体：飞书要求合法 JSON 且 `msg_type` ∈ {text, post, interactive, image, share_chat}；钉钉/企微要求合法 JSON 且 `msgtype` ∈ {text, markdown}。插值嵌入 JSON 字符串时用 `jesc` 函数转义。保存与预览时按渠道类型校验渲染结果。
   - 模板上下文：暴露完整告警数据结构（`{{ .Status }}`、`{{ .Alerts }}`、`{{ .CommonLabels }}`、`{{ range .Alerts }}...{{ end }}` 等）+ 系统变量（Root URL、接入源名称）。
-  - 内置函数：severity 颜色映射、时间格式化（时区可配）、label 取值/截断、Markdown 转义等；引入 Sprig 函数库。
-  - **在线预览**：模板编辑页输入/自动带入最近一条真实告警 JSON，实时渲染预览飞书卡片效果；语法错误与渲染错误即时提示。
-  - 模板渲染结果需校验为合法飞书消息体（JSON 结构校验），非法时拒绝保存并给出原因。
+  - 内置函数：severity 颜色映射、时间格式化（时区可配）、label 取值/截断等；引入 Sprig 函数库。
+  - **在线预览**：模板编辑页输入/自动带入最近一条真实告警 JSON，按模板的渠道类型实时渲染预览消息体 payload（飞书卡片另附本地模拟的卡片效果）；语法错误与渲染错误即时提示。
+  - 模板保存时用样例上下文试渲染，失败时拒绝保存并给出原因。
 - 卡片内告警详情跳转链接使用 Root URL 拼接。
 
 - [x] **FR-2.4 发送语义（有限重试，无重试队列）**：
@@ -126,8 +129,8 @@ POST /api/v1/alerts/webhook/:token
 - 收到 webhook 后按路由规则分发到渠道，**即时发送**：HTTP 请求级超时（默认 10s）。
 - **有限重试**：投递失败时，仅对瞬时错误（网络错误、超时、HTTP 5xx、IM 平台限频）在投递 goroutine 内原地重试，默认最多重试 2 次（退避 1s、3s，总耗时有界）；次数由 `FENGHUO_CHANNEL_RETRY_MAX` 配置，`0` 表示关闭。**明确失败的业务错误（签名错误、关键词缺失、机器人被移除等）不重试**——重试不会成功，交给人工排查。
 - 注意：Alertmanager 的 webhook 重发只在 Fenghuo 返回非 2xx 时触发，而 Fenghuo 接收后即返回 200，因此 **IM 投递失败没有外部兜底**——本地有限重试 + editor/admin 手动重发（FR-2.6）是仅有的两层保险。
-- 投递结果（成功/失败、尝试次数、飞书返回码与错误信息、耗时）完整记录到 `deliveries` 表，供页面排查；不做后台重试队列、不做状态机。
-- 飞书侧明确报错（如签名错误、关键词缺失、机器人被移除）时，投递记录中给出人类可读的失败原因提示。
+- 投递结果（成功/失败、尝试次数、渠道返回码与错误信息、耗时）完整记录到 `deliveries` 表，供页面排查；不做后台重试队列、不做状态机。
+- 渠道侧明确报错（如签名错误、关键词缺失、机器人被移除）时，投递记录中给出人类可读的失败原因提示。
 
 - [x] **FR-2.5** 测试发送：渠道配置页提供「发送测试消息」按钮，立即验证 URL + 签名是否正确。
 
@@ -288,7 +291,7 @@ deliveries          (id, alert_id FK, channel_id FK, channel_name, rule_id,
                      trigger_type /* auto|manual */, attempts,
                      status /* success|failed */, http_status, response_code,
                      response_msg, duration_ms, rendered_payload, sent_at)
-templates           (id, name, channel_type /* feishu|wecom|dingtalk */, content TEXT,
+templates           (id, name, channel_type /* feishu|dingtalk|wecom */, content TEXT,
                      is_builtin, remark, created_at, updated_at)
 ```
 
@@ -332,7 +335,7 @@ GET    /api/v1/system/info                            版本、Root URL、OAuth 
 2. **仪表盘**：今日告警数、投递成功率、失败 Top 渠道（V1 简版）。
 3. **告警记录**：筛选 + 分页 + 详情抽屉；editor/admin 可见的「失败投递」视图：失败原因查看 + 手动重发（FR-2.6）。
 4. **接入源管理**：列表、创建、token 复制/重置、Alertmanager 配置示例生成。
-5. **渠道管理**：飞书机器人配置表单（含 Secret 加签开关）、测试发送。
+5. **渠道管理**：飞书/钉钉/企业微信机器人配置表单（含 Secret 加签开关）、测试发送。
 6. **模板管理（亮点页）**：内置模板列表、自定义模板编辑器（代码高亮 + 实时渲染预览 + 真实告警样例数据）、模板与渠道绑定。
 7. **路由规则**：规则列表、label 匹配编辑器、拖拽排序（V1 可简化为优先级数字）。
 8. **系统设置**：个人信息、修改密码、（admin）用户管理。
@@ -344,7 +347,7 @@ GET    /api/v1/system/info                            版本、Root URL、OAuth 
 | 阶段 | 内容 | 验收标准 | 状态 |
 |---|---|---|---|
 | M1 骨架 | 工程脚手架、配置加载、DB 迁移、JWT 登录 | 能登录、能连库 | ✅ 代码完成，待实机验收 |
-| M2 核心链路 | Webhook 接收 → 飞书发送（含加签）→ 记录入库 | 开启签名校验的飞书机器人能收到告警卡片 | ✅ 代码完成，待实机验收 |
+| M2 核心链路 | Webhook 接收 → IM 发送（飞书/钉钉/企微，含加签）→ 记录入库 | 开启签名校验的机器人能收到告警消息 | ✅ 代码完成，待实机验收 |
 | M3 管理界面 | 渠道/接入源/告警记录页面、模板管理（含在线预览）、路由规则 | 全流程 UI 可操作 | ✅ 代码完成，待实机验收 |
 | M4 OAuth + Root URL | OAuth2 登录、Root URL 子路径部署 | 子路径反向代理下功能完整可用 | ✅ 代码完成，待实机验收 |
 | M5 打磨 | 测试、Docker、文档、demo compose | `docker compose up` 一键可用 | ⬜ 未开始 |

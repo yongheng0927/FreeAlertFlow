@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   Alert,
   Button,
   Card,
   Col,
+  Collapse,
   Divider,
   Form,
   Input,
@@ -20,7 +22,7 @@ import { CopyOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SaveOutlined }
 
 import { createTemplate, deleteTemplate, listTemplates, previewTemplate, updateTemplate } from '../api'
 import { errorMessage } from '../api/client'
-import type { Template } from '../api/types'
+import type { Template, TemplatePreview } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 
 const HEADER_COLORS: Record<string, string> = {
@@ -61,18 +63,30 @@ interface FeishuMessage {
   content?: { text?: string }
 }
 
-/** 剥离最基础的 lark_md 标记，做纯文本展示 */
+/** 剥离最基础的 markdown 标记，做纯文本展示 */
 function stripMd(s: string): string {
-  return s.replace(/\*\*/g, '').replace(/<at[^>]*><\/at>/g, '@')
+  return s
+    .replace(/\*\*/g, '')
+    .replace(/~~/g, '')
+    .replace(/<at[^>]*><\/at>/g, '@')
+}
+
+/** 格式化 JSON 字符串，失败时保留原文 */
+function prettyJson(s: string): string {
+  try {
+    return JSON.stringify(JSON.parse(s), null, 2)
+  } catch {
+    return s
+  }
 }
 
 /** 本地模拟的飞书卡片预览：header 颜色/标题 + 文本、按钮、分栏等常见元素的近似渲染 */
-function CardPreview({ rendered }: { rendered: string }) {
+function CardPreview({ payload }: { payload: string }) {
   let msg: FeishuMessage
   try {
-    msg = JSON.parse(rendered) as FeishuMessage
+    msg = JSON.parse(payload) as FeishuMessage
   } catch {
-    return <Typography.Text type="warning">渲染结果不是合法 JSON，无法生成卡片预览</Typography.Text>
+    return <Typography.Text type="warning">飞书消息体不是合法 JSON，无法生成卡片预览</Typography.Text>
   }
 
   if (msg.msg_type === 'text') {
@@ -134,6 +148,138 @@ function CardPreview({ rendered }: { rendered: string }) {
   )
 }
 
+/** 各渠道类型的 payload 结构说明与小示例 */
+const CHANNEL_PAYLOAD_HELP: Record<string, { desc: ReactNode; example: string }> = {
+  feishu: {
+    desc: (
+      <>
+        飞书机器人消息体：合法 JSON 且 <code>msg_type</code> 为 <code>text</code> / <code>post</code> /{' '}
+        <code>interactive</code> / <code>image</code> / <code>share_chat</code> 之一。
+        卡片消息用 <code>msg_type=interactive</code>：<code>card.header.template</code> 是头部颜色
+        （red/orange/green/blue 等），<code>card.header.title</code> 是标题，<code>card.elements</code>{' '}
+        是内容元素（div + lark_md 文本、hr 分割线、action 按钮等）。
+      </>
+    ),
+    example: `{
+  "msg_type": "interactive",
+  "card": {
+    "header": {
+      "template": "{{ severityColor (label .CommonLabels "severity") }}",
+      "title": {"tag": "plain_text", "content": "[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}"}
+    },
+    "elements": [
+      {"tag": "div", "text": {"tag": "lark_md", "content": "**来源** {{ jesc .SourceName }}"}}
+    ]
+  }
+}`,
+  },
+  dingtalk: {
+    desc: (
+      <>
+        钉钉机器人消息体：合法 JSON 且 <code>msgtype</code> 为 <code>text</code> 或 <code>markdown</code>。
+        markdown 消息的正文在 <code>markdown.text</code>，通知标题在 <code>markdown.title</code>；
+        钉钉 markdown 支持标题、加粗、链接、列表等语法。勾选了「@所有人」的渠道会由发送层自动注入{' '}
+        <code>at.isAtAll</code>，模板无需关心。
+      </>
+    ),
+    example: `{
+  "msgtype": "markdown",
+  "markdown": {
+    "title": "[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}",
+    "text": "## 告警\\n\\n- **来源**：{{ jesc .SourceName }}"
+  }
+}`,
+  },
+  wecom: {
+    desc: (
+      <>
+        企业微信机器人消息体：合法 JSON 且 <code>msgtype</code> 为 <code>text</code> 或 <code>markdown</code>。
+        markdown 消息的正文在 <code>markdown.content</code>；企微 markdown 是子集：支持标题、加粗、
+        链接、行内代码、引用，<strong>不支持列表、图片和 @人</strong>。
+      </>
+    ),
+    example: `{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "## [{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}\\n> 来源：{{ jesc .SourceName }}"
+  }
+}`,
+  },
+}
+
+/** 按当前渠道类型生成语法帮助面板 */
+function buildSyntaxHelp(channelType: string) {
+  const ch = CHANNEL_PAYLOAD_HELP[channelType] ?? CHANNEL_PAYLOAD_HELP.feishu
+  return [
+    {
+      key: 'payload',
+      label: '消息 payload 结构（按渠道类型）',
+      children: (
+        <Typography style={{ fontSize: 12 }}>
+          <p style={{ marginBottom: 8 }}>{ch.desc}</p>
+          <p style={{ marginBottom: 4 }}>示例：</p>
+          <pre className="json-view" style={{ marginTop: 0 }}>
+            {ch.example}
+          </pre>
+          <Typography.Text type="secondary">
+            模板渲染结果就是直接发送给机器人的消息体；保存和预览时会按渠道类型校验 JSON 合法性。
+            把插值嵌入 JSON 字符串时务必用 <code>| jesc</code> 转义。
+          </Typography.Text>
+        </Typography>
+      ),
+    },
+    {
+      key: 'template',
+      label: '插值变量与函数（Go text/template）',
+      children: (
+        <Typography style={{ fontSize: 12 }}>
+          <p style={{ marginBottom: 4 }}>可用变量：</p>
+          <ul style={{ paddingLeft: 18, marginBottom: 8 }}>
+            <li>
+              <code>{'{{ .Status }}'}</code>、<code>{'{{ .Receiver }}'}</code>、
+              <code>{'{{ .GroupKey }}'}</code>、<code>{'{{ .Version }}'}</code>
+            </li>
+            <li>
+              <code>{'{{ .ExternalURL }}'}</code>、<code>{'{{ .RootURL }}'}</code>、
+              <code>{'{{ .SourceName }}'}</code>
+            </li>
+            <li>
+              <code>{'{{ .GroupLabels }}'}</code>、<code>{'{{ .CommonLabels }}'}</code>、
+              <code>{'{{ .CommonAnnotations }}'}</code>（map）
+            </li>
+            <li>
+              <code>{'{{ range .Alerts }}'}</code> 遍历告警，字段：
+              <code>.Status</code>、<code>.Labels</code>、<code>.Annotations</code>、
+              <code>.StartsAt</code>、<code>.EndsAt</code>、<code>.GeneratorURL</code>、
+              <code>.Fingerprint</code>
+            </li>
+          </ul>
+          <p style={{ marginBottom: 4 }}>常用函数：</p>
+          <ul style={{ paddingLeft: 18, marginBottom: 8 }}>
+            <li>
+              <code>{'{{ label .CommonLabels "severity" }}'}</code> 取标签值
+            </li>
+            <li>
+              <code>{'{{ timeFormat "2006-01-02 15:04:05" .StartsAt }}'}</code> 格式化时间
+            </li>
+            <li>
+              <code>{'{{ jesc .SourceName }}'}</code> 转义后可安全嵌入 JSON 字符串
+            </li>
+            <li>
+              <code>{'{{ mdEscape .CommonAnnotations.summary }}'}</code> 转义 markdown 元字符
+            </li>
+            <li>
+              <code>{'{{ severityColor "critical" }}'}</code> severity 映射为卡片颜色；{' '}
+              <code>truncate</code> 截断文本
+            </li>
+            <li>同时支持 Sprig 函数库（如 <code>upper</code>）与 Go template 管道语法</li>
+          </ul>
+        </Typography>
+      ),
+    },
+  ]
+}
+
 interface EditorState {
   /** null = 新建 */
   id: number | null
@@ -153,20 +299,33 @@ const EMPTY_EDITOR: EditorState = {
   content: '',
 }
 
+/** 模板渠道类型元数据，颜色与渠道页一致 */
+const TEMPLATE_CHANNEL_TYPES: Record<string, { label: string; color: string }> = {
+  feishu: { label: '飞书', color: 'blue' },
+  dingtalk: { label: '钉钉', color: 'cyan' },
+  wecom: { label: '企业微信', color: 'green' },
+}
+
+function TemplateChannelTypeTag({ type }: { type: string }) {
+  const meta = TEMPLATE_CHANNEL_TYPES[type]
+  return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{type || '-'}</Tag>
+}
+
 export default function TemplatesPage() {
   const { canWrite } = useAuth()
   const [templates, setTemplates] = useState<Template[]>([])
   const [listLoading, setListLoading] = useState(false)
+  const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined)
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
-  const [rendered, setRendered] = useState<string | null>(null)
+  const [preview, setPreview] = useState<TemplatePreview | null>(null)
   const [previewError, setPreviewError] = useState('')
 
   const load = useCallback(async (selectId?: number) => {
     setListLoading(true)
     try {
-      const r = await listTemplates()
+      const r = await listTemplates(typeFilter)
       setTemplates(r.list)
       if (selectId !== undefined) {
         const t = r.list.find((x) => x.id === selectId)
@@ -177,7 +336,7 @@ export default function TemplatesPage() {
     } finally {
       setListLoading(false)
     }
-  }, [])
+  }, [typeFilter])
 
   useEffect(() => {
     void load()
@@ -192,7 +351,7 @@ export default function TemplatesPage() {
       remark: t.remark,
       content: t.content,
     })
-    setRendered(null)
+    setPreview(null)
     setPreviewError('')
   }
 
@@ -205,7 +364,7 @@ export default function TemplatesPage() {
       remark: t.remark,
       content: t.content,
     })
-    setRendered(null)
+    setPreview(null)
     setPreviewError('')
   }
 
@@ -224,10 +383,10 @@ export default function TemplatesPage() {
     if (!editor) return
     setPreviewing(true)
     setPreviewError('')
-    setRendered(null)
+    setPreview(null)
     try {
-      const r = await previewTemplate(editor.content)
-      setRendered(r)
+      const r = await previewTemplate(editor.content, editor.channelType)
+      setPreview(r)
     } catch (err) {
       setPreviewError(errorMessage(err, '预览失败'))
     } finally {
@@ -271,20 +430,34 @@ export default function TemplatesPage() {
           title="模板列表"
           size="small"
           extra={
-            canWrite && (
-              <Button
+            <Space>
+              <Select
                 size="small"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setEditor({ ...EMPTY_EDITOR })
-                  setRendered(null)
-                  setPreviewError('')
-                }}
-              >
-                新建
-              </Button>
-            )
+                allowClear
+                placeholder="全部渠道"
+                style={{ width: 110 }}
+                value={typeFilter}
+                onChange={(v) => setTypeFilter(v)}
+                options={Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
+                  value,
+                  label: m.label,
+                }))}
+              />
+              {canWrite && (
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setEditor({ ...EMPTY_EDITOR })
+                    setPreview(null)
+                    setPreviewError('')
+                  }}
+                >
+                  新建
+                </Button>
+              )}
+            </Space>
           }
         >
           <List
@@ -342,12 +515,13 @@ export default function TemplatesPage() {
                   title={
                     <Space size={6}>
                       <span>{t.name}</span>
+                      <TemplateChannelTypeTag type={t.channel_type} />
                       {t.is_builtin && <Tag color="gold">内置</Tag>}
                     </Space>
                   }
                   description={
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
-                      {t.remark || t.channel_type}
+                      {t.remark || '自定义模板'}
                     </Typography.Text>
                   }
                 />
@@ -397,12 +571,12 @@ export default function TemplatesPage() {
             )}
             <Form layout="vertical" disabled={readOnly}>
               <Row gutter={12}>
-                <Col span={10}>
+                <Col span={8}>
                   <Form.Item label="模板名称" required style={{ marginBottom: 12 }}>
                     <Input
                       value={editor.name}
                       maxLength={64}
-                      placeholder="如：critical-card"
+                      placeholder="如：critical-alert"
                       onChange={(e) => setEditor({ ...editor, name: e.target.value })}
                     />
                   </Form.Item>
@@ -411,12 +585,15 @@ export default function TemplatesPage() {
                   <Form.Item label="渠道类型" required style={{ marginBottom: 12 }}>
                     <Select
                       value={editor.channelType}
-                      options={[{ value: 'feishu', label: '飞书' }]}
+                      options={Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
+                        value,
+                        label: m.label,
+                      }))}
                       onChange={(v) => setEditor({ ...editor, channelType: v })}
                     />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col span={10}>
                   <Form.Item label="备注" style={{ marginBottom: 12 }}>
                     <Input
                       value={editor.remark}
@@ -428,7 +605,7 @@ export default function TemplatesPage() {
                 </Col>
               </Row>
               <Form.Item
-                label="模板内容（Go template 语法，渲染结果必须是合法飞书消息 JSON）"
+                label="模板内容（所选渠道消息 payload 的 Go template，渲染结果直接发送）"
                 required
                 style={{ marginBottom: 12 }}
                 className="template-editor"
@@ -437,13 +614,17 @@ export default function TemplatesPage() {
                   value={editor.content}
                   rows={16}
                   spellCheck={false}
-                  placeholder='{"msg_type":"text","content":{"text":"[{{ .Status }}] ..."}}'
+                  placeholder={
+                    '{"msg_type":"text","content":{"text":"[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}"}}'
+                  }
                   onChange={(e) => setEditor({ ...editor, content: e.target.value })}
                 />
               </Form.Item>
             </Form>
 
-            {(previewError || rendered !== null) && (
+            <Collapse size="small" ghost items={buildSyntaxHelp(editor.channelType)} style={{ marginBottom: 12 }} />
+
+            {(previewError || preview !== null) && (
               <>
                 <Divider orientation="left" plain style={{ margin: '8px 0 12px' }}>
                   渲染预览
@@ -451,31 +632,26 @@ export default function TemplatesPage() {
                 {previewError && (
                   <Alert type="error" showIcon message="渲染失败" description={previewError} />
                 )}
-                {rendered !== null && (
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        卡片效果
-                      </Typography.Text>
-                      <div style={{ marginTop: 8 }}>
-                        <CardPreview rendered={rendered} />
-                      </div>
-                    </Col>
-                    <Col span={12}>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        渲染结果 JSON
-                      </Typography.Text>
-                      <pre className="json-view" style={{ marginTop: 8 }}>
-                        {(() => {
-                          try {
-                            return JSON.stringify(JSON.parse(rendered), null, 2)
-                          } catch {
-                            return rendered
-                          }
-                        })()}
-                      </pre>
-                    </Col>
-                  </Row>
+                {preview !== null && (
+                  <>
+                    {editor.channelType === 'feishu' && (
+                      <>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          卡片效果（本地模拟，以实际发送为准）
+                        </Typography.Text>
+                        <div style={{ marginTop: 8, marginBottom: 16 }}>
+                          <CardPreview payload={preview.rendered} />
+                        </div>
+                      </>
+                    )}
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      消息体 JSON
+                      {editor.channelType !== 'feishu' && '（以实际发送为准）'}
+                    </Typography.Text>
+                    <pre className="json-view" style={{ marginTop: 8 }}>
+                      {prettyJson(preview.rendered)}
+                    </pre>
+                  </>
                 )}
               </>
             )}

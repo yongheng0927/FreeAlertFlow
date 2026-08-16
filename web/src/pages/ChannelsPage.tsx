@@ -34,6 +34,7 @@ import { useAuth } from '../auth/useAuth'
 
 interface ChannelFormValues {
   name: string
+  type: string
   webhook_url?: string
   secret?: string
   clear_secret?: boolean
@@ -41,6 +42,33 @@ interface ChannelFormValues {
   template_id?: number
   at_all: boolean
   enabled: boolean
+}
+
+const CHANNEL_TYPES: Record<string, { label: string; color: string; webhookPlaceholder: string }> = {
+  feishu: {
+    label: '飞书',
+    color: 'blue',
+    webhookPlaceholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx',
+  },
+  dingtalk: {
+    label: '钉钉',
+    color: 'cyan',
+    webhookPlaceholder: 'https://oapi.dingtalk.com/robot/send?access_token=xxx',
+  },
+  wecom: {
+    label: '企业微信',
+    color: 'green',
+    webhookPlaceholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx',
+  },
+}
+
+function channelTypeLabel(type: string): string {
+  return CHANNEL_TYPES[type]?.label ?? type
+}
+
+function ChannelTypeTag({ type }: { type: string }) {
+  const meta = CHANNEL_TYPES[type]
+  return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{type || '-'}</Tag>
 }
 
 export default function ChannelsPage() {
@@ -54,6 +82,9 @@ export default function ChannelsPage() {
   const [editing, setEditing] = useState<Channel | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<ChannelFormValues>()
+  // 表单内联动：按渠道类型切换 webhook 占位提示与 secret 字段显隐
+  const formType: string = Form.useWatch('type', form) ?? 'feishu'
+  const formTypeMeta = CHANNEL_TYPES[formType]
 
   const templateName = useMemo(() => {
     const m = new Map(templates.map((t) => [t.id, t.name]))
@@ -87,6 +118,7 @@ export default function ChannelsPage() {
     setEditing(c)
     form.setFieldsValue({
       name: c.name,
+      type: c.type,
       webhook_url: '',
       secret: '',
       clear_secret: false,
@@ -121,6 +153,7 @@ export default function ChannelsPage() {
       } else {
         await createChannel({
           name: v.name,
+          type: v.type,
           webhook_url: v.webhook_url ?? '',
           secret: v.secret || undefined,
           keyword: v.keyword || undefined,
@@ -154,7 +187,7 @@ export default function ChannelsPage() {
     try {
       const r = await testChannel(c.id)
       if (r.success) {
-        message.success(`测试消息发送成功（飞书 code=${r.code}，耗时 ${r.duration_ms} ms）`)
+        message.success(`测试消息发送成功（${channelTypeLabel(c.type)} code=${r.code}，耗时 ${r.duration_ms} ms）`)
       } else {
         Modal.warning({
           title: '测试消息发送失败',
@@ -162,7 +195,7 @@ export default function ChannelsPage() {
             <div>
               <p>HTTP 状态：{r.http_status}</p>
               <p>
-                飞书返回：code={r.code}，msg={r.msg || '-'}
+                {channelTypeLabel(c.type)}返回：code={r.code}，msg={r.msg || '-'}
               </p>
               <p>耗时：{r.duration_ms} ms</p>
             </div>
@@ -187,6 +220,12 @@ export default function ChannelsPage() {
 
   const columns: ColumnsType<Channel> = [
     { title: '名称', dataIndex: 'name', width: 150 },
+    {
+      title: '类型',
+      dataIndex: 'type',
+      width: 90,
+      render: (v: string) => <ChannelTypeTag type={v} />,
+    },
     {
       title: 'Webhook URL',
       dataIndex: 'webhook_url',
@@ -296,13 +335,27 @@ export default function ChannelsPage() {
         cancelText="取消"
         destroyOnClose
       >
-        <Form form={form} layout="vertical" initialValues={{ at_all: false, enabled: true }}>
+        <Form form={form} layout="vertical" initialValues={{ type: 'feishu', at_all: false, enabled: true }}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input placeholder="如：值班群告警机器人" maxLength={64} />
           </Form.Item>
           <Form.Item
+            name="type"
+            label="渠道类型"
+            rules={[{ required: true, message: '请选择渠道类型' }]}
+            tooltip={editing ? '渠道类型创建后不可修改' : undefined}
+          >
+            <Select
+              disabled={!!editing}
+              options={Object.entries(CHANNEL_TYPES).map(([value, m]) => ({
+                value,
+                label: m.label,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
             name="webhook_url"
-            label="飞书机器人 Webhook URL"
+            label={`${formTypeMeta?.label ?? '机器人'} Webhook URL`}
             tooltip={editing ? '列表中显示的是脱敏值；留空表示不修改' : undefined}
             rules={
               editing
@@ -313,21 +366,23 @@ export default function ChannelsPage() {
           >
             <Input
               placeholder={
-                editing ? '留空表示不修改' : 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx'
+                editing ? '留空表示不修改' : (formTypeMeta?.webhookPlaceholder ?? 'https://...')
               }
             />
           </Form.Item>
-          <Form.Item
-            name="secret"
-            label="签名 Secret"
-            tooltip="飞书机器人「签名校验」开启时必填"
-          >
-            <Input.Password
-              placeholder={editing ? (editing.has_secret ? '已配置，留空表示不修改' : '未配置') : '可选'}
-              autoComplete="new-password"
-            />
-          </Form.Item>
-          {editing?.has_secret && (
+          {formType !== 'wecom' && (
+            <Form.Item
+              name="secret"
+              label="签名 Secret"
+              tooltip={`${formTypeMeta?.label ?? '机器人'}「签名校验」开启时必填；企业微信机器人不支持加签`}
+            >
+              <Input.Password
+                placeholder={editing ? (editing.has_secret ? '已配置，留空表示不修改' : '未配置') : '可选'}
+                autoComplete="new-password"
+              />
+            </Form.Item>
+          )}
+          {editing?.has_secret && formType !== 'wecom' && (
             <Form.Item name="clear_secret" valuePropName="checked" style={{ marginTop: -12 }}>
               <Checkbox>清除已配置的签名 Secret</Checkbox>
             </Form.Item>
@@ -335,18 +390,20 @@ export default function ChannelsPage() {
           <Form.Item
             name="keyword"
             label="关键词"
-            tooltip="飞书机器人「自定义关键词」开启时，消息需包含该关键词"
+            tooltip="机器人「自定义关键词」开启时，消息需包含该关键词"
           >
             <Input placeholder="可选" maxLength={64} />
           </Form.Item>
-          <Form.Item name="template_id" label="绑定模板" tooltip="不绑定则使用内置默认模板">
+          <Form.Item name="template_id" label="绑定模板" tooltip="只列出与渠道类型一致的模板；不绑定则使用内置默认模板">
             <Select
               allowClear
               placeholder="默认模板"
-              options={templates.map((t) => ({
-                value: t.id,
-                label: t.is_builtin ? `${t.name}（内置）` : t.name,
-              }))}
+              options={templates
+                .filter((t) => t.channel_type === formType)
+                .map((t) => ({
+                  value: t.id,
+                  label: t.is_builtin ? `${t.name}（内置）` : t.name,
+                }))}
             />
           </Form.Item>
           <Form.Item name="at_all" valuePropName="checked">
