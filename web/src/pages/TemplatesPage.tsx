@@ -7,13 +7,12 @@ import {
   Col,
   Collapse,
   Divider,
-  Drawer,
   Form,
   Input,
   Modal,
   Popconfirm,
+  Radio,
   Row,
-  Segmented,
   Select,
   Space,
   Spin,
@@ -23,6 +22,7 @@ import {
   message,
 } from 'antd'
 import {
+  ArrowLeftOutlined,
   CopyOutlined,
   DeleteOutlined,
   EyeOutlined,
@@ -512,7 +512,7 @@ export default function TemplatesPage() {
       return Number(a.is_builtin) - Number(b.is_builtin) || b.id - a.id
     })
 
-  const drawerTitle = editor
+  const editorTitle = editor
     ? editor.id === null
       ? '新建模板'
       : editor.isBuiltin
@@ -520,12 +520,203 @@ export default function TemplatesPage() {
         : `编辑模板：${editor.name}`
     : ''
 
+  // 编辑态：整页容器（与路由规则页同模式），左编辑右预览
+  if (editor !== null) {
+    return (
+      <Card
+        size="small"
+        title={
+          <Space size={4}>
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => setEditor(null)}
+            />
+            <span>{editorTitle}</span>
+          </Space>
+        }
+        extra={
+          <Space>
+            <Button icon={<EyeOutlined />} loading={previewing} onClick={() => void onPreview()}>
+              预览
+            </Button>
+            {canWrite && (
+              <Button icon={<SendOutlined />} onClick={() => void openTestSend()}>
+                发送测试
+              </Button>
+            )}
+            {!readOnly && (
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={saving}
+                disabled={!editor.name.trim() || !editor.content.trim()}
+                onClick={() => void onSave()}
+              >
+                保存
+              </Button>
+            )}
+          </Space>
+        }
+      >
+        {editor.isBuiltin && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="内置模板只读，可点击卡片上的复制按钮创建可编辑副本。"
+          />
+        )}
+        <Row gutter={16}>
+          <Col xl={14}>
+            <Form layout="vertical" disabled={readOnly}>
+              <Row gutter={12}>
+                <Col span={8}>
+                  <Form.Item label="模板名称" required style={{ marginBottom: 12 }}>
+                    <Input
+                      value={editor.name}
+                      maxLength={64}
+                      placeholder="如：critical-alert"
+                      onChange={(e) => setEditor({ ...editor, name: e.target.value })}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={6}>
+                  <Form.Item label="渠道类型" required style={{ marginBottom: 12 }}>
+                    <Select
+                      value={editor.channelType}
+                      options={Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
+                        value,
+                        label: m.label,
+                      }))}
+                      onChange={(v) => setEditor({ ...editor, channelType: v })}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={10}>
+                  <Form.Item label="备注" style={{ marginBottom: 12 }}>
+                    <Input
+                      value={editor.remark}
+                      maxLength={255}
+                      placeholder="一句话说明这个模板是做什么的，会显示在卡片上"
+                      onChange={(e) => setEditor({ ...editor, remark: e.target.value })}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item
+                label="模板内容（所选渠道消息 payload 的 Go template，渲染结果直接发送）"
+                required
+                style={{ marginBottom: 12 }}
+                className="template-editor"
+              >
+                <Input.TextArea
+                  value={editor.content}
+                  rows={22}
+                  spellCheck={false}
+                  placeholder={
+                    '{"msg_type":"text","content":{"text":"[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}"}}'
+                  }
+                  onChange={(e) => setEditor({ ...editor, content: e.target.value })}
+                />
+              </Form.Item>
+            </Form>
+
+            <Collapse size="small" ghost items={buildSyntaxHelp(editor.channelType)} style={{ marginBottom: 12 }} />
+          </Col>
+
+          <Col xl={10}>
+            <Divider orientation="left" plain style={{ margin: '0 0 12px' }}>
+              渲染预览
+            </Divider>
+            {previewError === '' && preview === null && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                点击右上角「预览」，用样例告警渲染当前模板；点「发送测试」可真实投递到渠道，在
+                IM 客户端查看最终效果。
+              </Typography.Text>
+            )}
+            {previewError && (
+              <Alert type="error" showIcon message="渲染失败" description={previewError} />
+            )}
+            {preview !== null && (
+              <>
+                {editor.channelType === 'feishu' && (
+                  <>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      卡片效果（本地模拟，以实际发送为准）
+                    </Typography.Text>
+                    <div style={{ marginTop: 8, marginBottom: 16 }}>
+                      <CardPreview payload={preview.rendered} />
+                    </div>
+                  </>
+                )}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  消息体 JSON
+                  {editor.channelType !== 'feishu' && '（以实际发送为准）'}
+                </Typography.Text>
+                <pre className="json-view" style={{ marginTop: 8 }}>
+                  {prettyJson(preview.rendered)}
+                </pre>
+              </>
+            )}
+          </Col>
+        </Row>
+
+        <Modal
+          title="发送测试"
+          open={testOpen}
+          okText="发送"
+          cancelText="关闭"
+          okButtonProps={{ disabled: testChannelId === undefined, loading: testSending }}
+          onOk={() => void onTestSend()}
+          onCancel={() => setTestOpen(false)}
+        >
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+            用当前编辑器中的模板内容渲染样例告警，真实投递到所选渠道（不会写入投递记录）。
+          </Typography.Paragraph>
+          {testChannels.length === 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={`没有 ${TEMPLATE_CHANNEL_TYPES[editor.channelType]?.label ?? editor.channelType} 类型的渠道，请先到「通知渠道」页创建。`}
+            />
+          ) : (
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择接收测试消息的渠道"
+              value={testChannelId}
+              onChange={(v) => setTestChannelId(v)}
+              options={testChannels.map((c) => ({ value: c.id, label: c.name }))}
+            />
+          )}
+          {testResult && (
+            <Alert
+              style={{ marginTop: 12 }}
+              type={testResult.success ? 'success' : 'error'}
+              showIcon
+              message={testResult.success ? `发送成功，耗时 ${testResult.duration_ms} ms` : '发送失败'}
+              description={
+                testResult.success
+                  ? undefined
+                  : `HTTP ${testResult.http_status}，code=${testResult.code}，${testResult.msg || '-'}`
+              }
+            />
+          )}
+        </Modal>
+      </Card>
+    )
+  }
+
+  // 列表态：筛选/排序工具栏 + 卡片墙
   return (
     <>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }} wrap>
-        <Segmented
+        <Radio.Group
           value={typeFilter}
-          onChange={(v) => setTypeFilter(v as string)}
+          onChange={(e) => setTypeFilter(e.target.value as string)}
+          optionType="button"
+          buttonStyle="solid"
           options={[
             { label: '全部', value: '' },
             ...Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
@@ -534,9 +725,11 @@ export default function TemplatesPage() {
             })),
           ]}
         />
-        <Segmented
+        <Radio.Group
           value={sortBy}
-          onChange={(v) => setSortBy(v as SortBy)}
+          onChange={(e) => setSortBy(e.target.value as SortBy)}
+          optionType="button"
+          buttonStyle="solid"
           options={[
             { label: '最近更新', value: 'updated' },
             { label: '最新创建', value: 'created' },
@@ -630,179 +823,6 @@ export default function TemplatesPage() {
           <Typography.Text type="secondary">该渠道类型下暂无模板。</Typography.Text>
         )}
       </Spin>
-
-      <Drawer
-        width={860}
-        open={editor !== null}
-        onClose={() => setEditor(null)}
-        title={drawerTitle}
-        extra={
-          editor && (
-            <Space>
-              <Button icon={<EyeOutlined />} loading={previewing} onClick={() => void onPreview()}>
-                预览
-              </Button>
-              {canWrite && (
-                <Button icon={<SendOutlined />} onClick={() => void openTestSend()}>
-                  发送测试
-                </Button>
-              )}
-              {!readOnly && (
-                <Button
-                  type="primary"
-                  icon={<SaveOutlined />}
-                  loading={saving}
-                  disabled={!editor.name.trim() || !editor.content.trim()}
-                  onClick={() => void onSave()}
-                >
-                  保存
-                </Button>
-              )}
-            </Space>
-          )
-        }
-      >
-        {editor && (
-          <>
-            {editor.isBuiltin && (
-              <Alert
-                type="info"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message="内置模板只读，可点击卡片上的复制按钮创建可编辑副本。"
-              />
-            )}
-            <Form layout="vertical" disabled={readOnly}>
-              <Row gutter={12}>
-                <Col span={8}>
-                  <Form.Item label="模板名称" required style={{ marginBottom: 12 }}>
-                    <Input
-                      value={editor.name}
-                      maxLength={64}
-                      placeholder="如：critical-alert"
-                      onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={6}>
-                  <Form.Item label="渠道类型" required style={{ marginBottom: 12 }}>
-                    <Select
-                      value={editor.channelType}
-                      options={Object.entries(TEMPLATE_CHANNEL_TYPES).map(([value, m]) => ({
-                        value,
-                        label: m.label,
-                      }))}
-                      onChange={(v) => setEditor({ ...editor, channelType: v })}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={10}>
-                  <Form.Item label="备注" style={{ marginBottom: 12 }}>
-                    <Input
-                      value={editor.remark}
-                      maxLength={255}
-                      placeholder="一句话说明这个模板是做什么的，会显示在卡片上"
-                      onChange={(e) => setEditor({ ...editor, remark: e.target.value })}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-              <Form.Item
-                label="模板内容（所选渠道消息 payload 的 Go template，渲染结果直接发送）"
-                required
-                style={{ marginBottom: 12 }}
-                className="template-editor"
-              >
-                <Input.TextArea
-                  value={editor.content}
-                  rows={18}
-                  spellCheck={false}
-                  placeholder={
-                    '{"msg_type":"text","content":{"text":"[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}"}}'
-                  }
-                  onChange={(e) => setEditor({ ...editor, content: e.target.value })}
-                />
-              </Form.Item>
-            </Form>
-
-            <Collapse size="small" ghost items={buildSyntaxHelp(editor.channelType)} style={{ marginBottom: 12 }} />
-
-            {(previewError || preview !== null) && (
-              <>
-                <Divider orientation="left" plain style={{ margin: '8px 0 12px' }}>
-                  渲染预览
-                </Divider>
-                {previewError && (
-                  <Alert type="error" showIcon message="渲染失败" description={previewError} />
-                )}
-                {preview !== null && (
-                  <>
-                    {editor.channelType === 'feishu' && (
-                      <>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          卡片效果（本地模拟，以实际发送为准）
-                        </Typography.Text>
-                        <div style={{ marginTop: 8, marginBottom: 16 }}>
-                          <CardPreview payload={preview.rendered} />
-                        </div>
-                      </>
-                    )}
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      消息体 JSON
-                      {editor.channelType !== 'feishu' && '（以实际发送为准）'}
-                    </Typography.Text>
-                    <pre className="json-view" style={{ marginTop: 8 }}>
-                      {prettyJson(preview.rendered)}
-                    </pre>
-                  </>
-                )}
-              </>
-            )}
-
-            <Modal
-              title="发送测试"
-              open={testOpen}
-              okText="发送"
-              cancelText="关闭"
-              okButtonProps={{ disabled: testChannelId === undefined, loading: testSending }}
-              onOk={() => void onTestSend()}
-              onCancel={() => setTestOpen(false)}
-            >
-              <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-                用当前编辑器中的模板内容渲染样例告警，真实投递到所选渠道（不会写入投递记录）。
-              </Typography.Paragraph>
-              {testChannels.length === 0 ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={`没有 ${TEMPLATE_CHANNEL_TYPES[editor.channelType]?.label ?? editor.channelType} 类型的渠道，请先到「通知渠道」页创建。`}
-                />
-              ) : (
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder="选择接收测试消息的渠道"
-                  value={testChannelId}
-                  onChange={(v) => setTestChannelId(v)}
-                  options={testChannels.map((c) => ({ value: c.id, label: c.name }))}
-                />
-              )}
-              {testResult && (
-                <Alert
-                  style={{ marginTop: 12 }}
-                  type={testResult.success ? 'success' : 'error'}
-                  showIcon
-                  message={testResult.success ? `发送成功，耗时 ${testResult.duration_ms} ms` : '发送失败'}
-                  description={
-                    testResult.success
-                      ? undefined
-                      : `HTTP ${testResult.http_status}，code=${testResult.code}，${testResult.msg || '-'}`
-                  }
-                />
-              )}
-            </Modal>
-          </>
-        )}
-      </Drawer>
     </>
   )
 }
