@@ -24,6 +24,14 @@ import (
 )
 
 func main() {
+	// 子命令：容器内重置初始管理员密码（docker exec / kubectl exec 使用）
+	if len(os.Args) > 1 && os.Args[1] == "reset-admin-password" {
+		if err := resetAdminPassword(os.Args[2:]); err != nil {
+			slog.Error("reset-admin-password failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("startup failed", "error", err)
 		os.Exit(1)

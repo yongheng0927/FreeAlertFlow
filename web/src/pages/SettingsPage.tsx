@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Descriptions, Form, Input, Switch, Tag, Typography, message } from 'antd'
+import { Button, Card, Col, Descriptions, Form, Input, Row, Switch, Tag, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 
 import { changePassword, getSystemInfo } from '../api'
@@ -41,8 +41,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      <Card title="个人信息" style={{ marginBottom: 16 }}>
+    <Row gutter={16}>
+      <Col xs={24} xl={12}>
+        <Card title="个人信息" style={{ marginBottom: 16 }}>
         <Descriptions column={1} size="small">
           <Descriptions.Item label="用户名">{user?.username}</Descriptions.Item>
           <Descriptions.Item label="名称">{user?.name || '-'}</Descriptions.Item>
@@ -58,18 +59,20 @@ export default function SettingsPage() {
         </Descriptions>
       </Card>
 
-      <Card title="界面设置" style={{ marginBottom: 16 }}>
-        <Descriptions column={1} size="small">
-          <Descriptions.Item label="深色模式">
-            <Switch
-              size="small"
-              checked={getThemeMode() === 'dark'}
-              onChange={(v) => setThemeMode(v ? 'dark' : 'light')}
-            />
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+        <Card title="界面设置" style={{ marginBottom: 16 }}>
+          <Descriptions column={1} size="small">
+            <Descriptions.Item label="深色模式">
+              <Switch
+                size="small"
+                checked={getThemeMode() === 'dark'}
+                onChange={(v) => setThemeMode(v ? 'dark' : 'light')}
+              />
+            </Descriptions.Item>
+          </Descriptions>
+        </Card>
+      </Col>
 
+      <Col xs={24} xl={12}>
       {user?.has_password !== false && (
         <Card title="修改密码" style={{ marginBottom: 16 }}>
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
@@ -134,6 +137,7 @@ export default function SettingsPage() {
           </Descriptions>
         </Card>
       )}
-    </div>
+      </Col>
+    </Row>
   )
 }
