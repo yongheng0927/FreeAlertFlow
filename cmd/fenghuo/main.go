@@ -167,6 +167,11 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// 保留期清理后台任务（retention_days <= 0 时内部直接返回）
+	go service.NewRetentionCleaner(alertStore,
+		time.Duration(cfg.Alert.RetentionDays)*24*time.Hour).Run(ctx)
+
 	<-ctx.Done()
 
 	slog.Info("shutting down")

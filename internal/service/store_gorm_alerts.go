@@ -137,6 +137,31 @@ func (s *GormAlertStore) CreateWithDedupCheck(ctx context.Context, a *model.Aler
 	return deduped, err
 }
 
+// DeleteOlderThan 删除 cutoff 之前的告警并级联删除其投递记录 用
+// try-lock 跳过并发执行：多副本同时触发清理时只有一个实际执行
+func (s *GormAlertStore) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	deleted := int64(0)
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var locked bool
+		if err := tx.Raw("SELECT pg_try_advisory_xact_lock(hashtextextended('retention-cleanup', 0))").Scan(&locked).Error; err != nil {
+			return err
+		}
+		if !locked {
+			return nil // 另一实例正在清理，本轮跳过
+		}
+		if err := tx.Exec("DELETE FROM deliveries WHERE alert_id IN (SELECT id FROM alerts WHERE received_at < ?)", cutoff).Error; err != nil {
+			return err
+		}
+		res := tx.Exec("DELETE FROM alerts WHERE received_at < ?", cutoff)
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected
+		return nil
+	})
+	return deleted, err
+}
+
 func (s *GormAlertStore) FindLatestInWindow(ctx context.Context, fingerprint, status string,
 	since time.Time, excludeID int64) (*model.Alert, error) {
 	var a model.Alert

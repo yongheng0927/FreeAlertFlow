@@ -91,6 +91,21 @@ func (f *fakeAlertStore) UpdateDisposition(_ context.Context, id int64, disposit
 	return nil
 }
 
+// DeleteOlderThan 删除 cutoff 之前的告警（fake 不级联 fakeDeliveryStore，
+// 清理器测试只断言告警侧）
+func (f *fakeAlertStore) DeleteOlderThan(_ context.Context, cutoff time.Time) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var n int64
+	for id, a := range f.byID {
+		if a.ReceivedAt.Before(cutoff) {
+			delete(f.byID, id)
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeAlertStore) FindLatestInWindow(_ context.Context, fingerprint, status string,
 	since time.Time, excludeID int64) (*model.Alert, error) {
 	f.mu.Lock()

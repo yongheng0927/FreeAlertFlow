@@ -53,6 +53,10 @@ type AlertStore interface {
 	// List 返回筛选后的一页告警（按 received_at 倒序）和总数
 	List(ctx context.Context, f AlertFilter) ([]model.Alert, int64, error)
 	CountBySource(ctx context.Context, sourceID int64) (int64, error)
+	// DeleteOlderThan 删除 received_at 早于 cutoff 的告警，投递记录随告警
+	// 级联删除；实现需在多副本并发执行时安全（如 try-lock 跳过）。返回
+	// 删除的告警条数
+	DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 	// LatestRawPayload 返回最近一条告警的 raw_payload，作为模板预览的真实
 	// 数据源，没有告警时返回 nil
 	LatestRawPayload(ctx context.Context) (json.RawMessage, error)
