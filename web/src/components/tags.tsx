@@ -21,6 +21,7 @@ const DISPOSITION: Record<string, { text: string; color: string }> = {
   delivered: { text: '已投递', color: 'green' },
   deduped: { text: '已去重', color: 'default' },
   unmatched: { text: '未匹配规则', color: 'orange' },
+  pending: { text: '待分发', color: 'blue' },
 }
 
 export function DispositionTag({ disposition }: { disposition: string }) {

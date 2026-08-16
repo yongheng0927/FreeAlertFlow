@@ -39,6 +39,11 @@ type AlertFilter struct {
 // AlertStore 抽象告警的持久化
 type AlertStore interface {
 	Create(ctx context.Context, a *model.Alert) error
+	// CreateWithDedupCheck 原子完成去重判定与入库（FR-1.3）：实现必须以
+	// 事务/锁保证"查窗口内上一条 + 插入"之间不插入并发告警（多副本共用
+	// 数据库时同样互斥）。命中去重时新行以 disposition='deduped' 入库并
+	// 返回 true；否则以 'pending' 入库等待分发 window 为 0 时关闭去重
+	CreateWithDedupCheck(ctx context.Context, a *model.Alert, window time.Duration) (bool, error)
 	FindByID(ctx context.Context, id int64) (*model.Alert, error)
 	UpdateDisposition(ctx context.Context, id int64, disposition string) error
 	// FindLatestInWindow 返回 (fingerprint, status) 相同且 received_at >= since

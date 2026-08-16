@@ -49,6 +49,35 @@ func (f *fakeAlertStore) Create(_ context.Context, a *model.Alert) error {
 	return nil
 }
 
+// CreateWithDedupCheck 用互斥锁模拟生产实现的咨询锁语义（FR-1.3）
+func (f *fakeAlertStore) CreateWithDedupCheck(_ context.Context, a *model.Alert, window time.Duration) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	deduped := false
+	if window > 0 {
+		since := time.Now().Add(-window)
+		var latest *model.Alert
+		for _, x := range f.byID {
+			if x.Fingerprint != a.Fingerprint || x.Status != a.Status || x.ReceivedAt.Before(since) {
+				continue
+			}
+			if latest == nil || x.ReceivedAt.After(latest.ReceivedAt) {
+				latest = x
+			}
+		}
+		deduped = latest != nil && latest.ContentHash == a.ContentHash
+	}
+	if deduped {
+		a.Disposition = "deduped"
+	} else {
+		a.Disposition = "pending"
+	}
+	a.ID = f.nextID
+	f.nextID++
+	f.byID[a.ID] = a
+	return deduped, nil
+}
+
 func (f *fakeAlertStore) FindByID(_ context.Context, id int64) (*model.Alert, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

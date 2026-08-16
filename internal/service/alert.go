@@ -95,11 +95,17 @@ func (s *AlertService) Ingest(ctx context.Context, token string, body []byte) (*
 			StartsAt:    a.StartsAt,
 			EndsAt:      endsAt,
 			RawPayload:  raw,
-			Disposition: "delivered",
 			ReceivedAt:  now,
 		}
-		if err := s.alerts.Create(ctx, row); err != nil {
+		// 去重判定与入库是原子的：窗口内同内容的重复告警以 deduped 落库，
+		// 不进入分发（FR-1.3）
+		deduped, err := s.alerts.CreateWithDedupCheck(ctx, row, s.dedupWindow)
+		if err != nil {
 			return nil, 0, fmt.Errorf("store alert: %w", err)
+		}
+		if deduped {
+			metrics.IncDisposition("deduped")
+			continue
 		}
 		ids = append(ids, row.ID)
 	}
@@ -125,8 +131,8 @@ func (s *AlertService) dispatchAll(ids []int64, sourceName string) {
 	}
 }
 
-// Dispatch 执行单条告警的处理流水线：去重检查（FR-1.3）、路由匹配
-// （FR-3.2）、多渠道并行投递（NFR-2）、更新 disposition
+// Dispatch 执行单条告警的处理流水线：路由匹配（FR-3.2）、多渠道并行投递
+// （NFR-2）、更新 disposition 去重判定已在入库时原子完成（FR-1.3）
 func (s *AlertService) Dispatch(ctx context.Context, alertID int64, sourceName string) error {
 	alert, err := s.alerts.FindByID(ctx, alertID)
 	if err != nil {
@@ -134,19 +140,6 @@ func (s *AlertService) Dispatch(ctx context.Context, alertID int64, sourceName s
 	}
 	if alert == nil {
 		return fmt.Errorf("alert %d not found", alertID)
-	}
-
-	// 去重：窗口内 (fingerprint, status) 相同且 content_hash 未变的告警
-	// 只入库不发送（FR-1.3）
-	if s.dedupWindow > 0 {
-		prev, err := s.alerts.FindLatestInWindow(ctx, alert.Fingerprint, alert.Status,
-			s.now().Add(-s.dedupWindow), alert.ID)
-		if err != nil {
-			return err
-		}
-		if prev != nil && prev.ContentHash == alert.ContentHash {
-			return s.setDisposition(ctx, alert.ID, "deduped")
-		}
 	}
 
 	msg, err := ParseAMWebhook(alert.RawPayload)

@@ -105,6 +105,38 @@ func (s *GormAlertStore) UpdateDisposition(ctx context.Context, id int64, dispos
 		Update("disposition", disposition).Error
 }
 
+// CreateWithDedupCheck 在事务内用 PG 事务级咨询锁串行化同
+// (fingerprint,status) 的并发写入——多副本共用同一个数据库时锁同样
+// 互斥，从而消除"先查后插"的重发/漏发竞态（FR-1.3）
+func (s *GormAlertStore) CreateWithDedupCheck(ctx context.Context, a *model.Alert, window time.Duration) (bool, error) {
+	deduped := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if window > 0 {
+			lockKey := a.Fingerprint + "|" + a.Status
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", lockKey).Error; err != nil {
+				return err
+			}
+			var prev model.Alert
+			err := tx.Where("fingerprint = ? AND status = ? AND received_at >= ?",
+				a.Fingerprint, a.Status, time.Now().Add(-window)).
+				Order("received_at DESC").Take(&prev).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if err == nil && prev.ContentHash == a.ContentHash {
+				deduped = true
+			}
+		}
+		if deduped {
+			a.Disposition = "deduped"
+		} else {
+			a.Disposition = "pending"
+		}
+		return tx.Create(a).Error
+	})
+	return deduped, err
+}
+
 func (s *GormAlertStore) FindLatestInWindow(ctx context.Context, fingerprint, status string,
 	since time.Time, excludeID int64) (*model.Alert, error) {
 	var a model.Alert
