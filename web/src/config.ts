@@ -7,6 +7,8 @@ export interface FenghuoRuntimeConfig {
   oauthEnabled?: boolean
   /** SPA 部署的基础路径，例如 /faf/ */
   base?: string
+  /** 后端注入的应用版本号 */
+  version?: string
 }
 
 declare global {
@@ -29,6 +31,8 @@ export const runtimeConfig = {
   oauthEnabled: injected.oauthEnabled ?? false,
   /** SPA 基础路径，始终以 '/' 结尾（默认为 '/'） */
   base: normalizeBase(injected.base),
+  /** 后端注入的应用版本号（可能为空） */
+  version: injected.version ?? '',
 }
 
 /** 所有 API 请求的基础 URL（相对路径，可配合开发代理使用） */

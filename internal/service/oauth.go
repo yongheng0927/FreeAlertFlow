@@ -164,6 +164,10 @@ func (s *OAuthService) LoginWithCode(ctx context.Context, code string) (*model.U
 	if !user.Enabled {
 		return nil, nil, ErrAccountDisabled
 	}
+	// 与密码登录一致：记录最近登录时间
+	if err := s.users.UpdateLastLogin(ctx, user.ID, time.Now()); err != nil {
+		return nil, nil, err
+	}
 	pair, err := s.auth.IssueTokens(ctx, user)
 	if err != nil {
 		return nil, nil, err

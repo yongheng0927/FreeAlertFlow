@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
+import { runtimeConfig } from '../config'
 import { useAuth } from '../auth/useAuth'
 
 const { Sider, Header, Content } = Layout
@@ -64,27 +65,41 @@ export default function AppLayout() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider theme="dark" width={208}>
-        <div
-          style={{
-            height: 56,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontSize: 17,
-            fontWeight: 600,
-            letterSpacing: 0.5,
-          }}
-        >
-          烽火台
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div
+            style={{
+              height: 56,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 17,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+            }}
+          >
+            烽火台
+          </div>
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            items={items}
+            onClick={({ key }) => navigate(key)}
+          />
+          {runtimeConfig.version && (
+            <div
+              style={{
+                marginTop: 'auto',
+                padding: '12px 24px',
+                color: 'rgba(255,255,255,0.45)',
+                fontSize: 12,
+              }}
+            >
+              v{runtimeConfig.version}
+            </div>
+          )}
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={items}
-          onClick={({ key }) => navigate(key)}
-        />
       </Sider>
       <Layout>
         <Header

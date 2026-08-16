@@ -129,7 +129,7 @@ export default function UsersPage() {
 
   const columns: ColumnsType<User> = [
     {
-      title: '用户',
+      title: '名称',
       width: 220,
       render: (_, u) => (
         <Space>
@@ -143,7 +143,6 @@ export default function UsersPage() {
       ),
     },
     { title: '用户名', dataIndex: 'username', width: 140 },
-    { title: '邮箱', dataIndex: 'email', width: 200, render: (v: string) => v || '-' },
     {
       title: '角色',
       dataIndex: 'role',
@@ -269,9 +268,9 @@ export default function UsersPage() {
           <Form.Item name="role" label="角色">
             <Select
               options={[
-                { value: 'viewer', label: 'Viewer —— 只读（查看告警/投递/仪表盘）' },
-                { value: 'editor', label: 'Editor —— 可信运维（配置接入源/渠道/模板/规则，可重发）' },
-                { value: 'admin', label: 'Admin —— 管理员（含用户管理）' },
+                { value: 'viewer', label: 'Viewer' },
+                { value: 'editor', label: 'Editor' },
+                { value: 'admin', label: 'Admin' },
               ]}
             />
           </Form.Item>
@@ -316,9 +315,9 @@ export default function UsersPage() {
           value={roleValue}
           onChange={(v) => setRoleValue(v)}
           options={[
-            { value: 'viewer', label: 'Viewer —— 只读（查看告警/投递/仪表盘）' },
-            { value: 'editor', label: 'Editor —— 可信运维（配置接入源/渠道/模板/规则，可重发）' },
-            { value: 'admin', label: 'Admin —— 管理员（含用户管理）' },
+            { value: 'viewer', label: 'Viewer' },
+            { value: 'editor', label: 'Editor' },
+            { value: 'admin', label: 'Admin' },
           ]}
         />
       </Modal>

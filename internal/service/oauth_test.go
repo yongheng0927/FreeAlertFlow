@@ -82,6 +82,11 @@ func TestOAuthAutoCreateUser(t *testing.T) {
 	if pair.AccessToken == "" {
 		t.Error("token pair must be issued")
 	}
+	// OAuth 登录也要记录最近登录时间
+	stored, _ := users.FindByID(context.Background(), user.ID)
+	if stored.LastLoginAt == nil {
+		t.Error("oauth login must update last_login_at")
+	}
 	// 身份已绑定，第二次登录解析到同一个用户
 	iden, _ := identities.FindByProviderUserID(context.Background(), "feishu", "ou_abc123")
 	if iden == nil || iden.UserID != user.ID {

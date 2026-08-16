@@ -10,9 +10,9 @@ import { formatTime } from '../utils'
 import { useAuth } from '../auth/useAuth'
 
 const ROLE_TEXT: Record<string, string> = {
-  viewer: 'Viewer（只读）',
-  editor: 'Editor（运维）',
-  admin: 'Admin（管理员）',
+  viewer: 'Viewer',
+  editor: 'Editor',
+  admin: 'Admin',
 }
 
 export default function SettingsPage() {
@@ -45,8 +45,7 @@ export default function SettingsPage() {
       <Card title="个人信息" style={{ marginBottom: 16 }}>
         <Descriptions column={1} size="small">
           <Descriptions.Item label="用户名">{user?.username}</Descriptions.Item>
-          <Descriptions.Item label="姓名">{user?.name || '-'}</Descriptions.Item>
-          <Descriptions.Item label="邮箱">{user?.email || '-'}</Descriptions.Item>
+          <Descriptions.Item label="名称">{user?.name || '-'}</Descriptions.Item>
           {isAdmin && (
             <Descriptions.Item label="角色">
               <Tag color={user?.role === 'admin' ? 'gold' : user?.role === 'editor' ? 'blue' : 'default'}>
