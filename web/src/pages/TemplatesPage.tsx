@@ -28,6 +28,7 @@ import {
   EyeOutlined,
   PlusOutlined,
   SaveOutlined,
+  SearchOutlined,
   SendOutlined,
 } from '@ant-design/icons'
 
@@ -345,6 +346,7 @@ export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [typeFilter, setTypeFilter] = useState('')
+  const [keyword, setKeyword] = useState('')
   const [sortBy, setSortByState] = useState<SortBy>(loadSortBy)
   const [recentId, setRecentId] = useState<number | null>(null)
   const [editor, setEditor] = useState<EditorState | null>(null)
@@ -502,9 +504,16 @@ export default function TemplatesPage() {
 
   const readOnly = !canWrite || (editor?.isBuiltin ?? false)
 
-  // 渠道过滤 + 排序：同排序值时自定义模板排在内置之前
+  // 渠道过滤 + 关键词搜索（名称/备注）+ 排序：同排序值时自定义模板排在内置之前
+  const kw = keyword.trim().toLowerCase()
   const shown = [...templates]
     .filter((t) => !typeFilter || t.channel_type === typeFilter)
+    .filter(
+      (t) =>
+        !kw ||
+        t.name.toLowerCase().includes(kw) ||
+        (t.remark ?? '').toLowerCase().includes(kw),
+    )
     .sort((a, b) => {
       const diff =
         sortBy === 'updated' ? b.updated_at.localeCompare(a.updated_at) : b.id - a.id
@@ -725,6 +734,14 @@ export default function TemplatesPage() {
             })),
           ]}
         />
+        <Input
+          allowClear
+          prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+          placeholder="搜索名称 / 备注"
+          style={{ width: 220 }}
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+        />
         <Radio.Group
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
@@ -820,7 +837,9 @@ export default function TemplatesPage() {
           ))}
         </Row>
         {!listLoading && shown.length === 0 && (
-          <Typography.Text type="secondary">该渠道类型下暂无模板。</Typography.Text>
+          <Typography.Text type="secondary">
+            {kw ? '没有匹配的模板，换个关键词试试。' : '该渠道类型下暂无模板。'}
+          </Typography.Text>
         )}
       </Spin>
     </>
