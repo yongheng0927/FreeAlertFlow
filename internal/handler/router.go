@@ -79,7 +79,7 @@ func NewRouter(d *Deps) *gin.Engine {
 	// 展示 OAuth 登录入口（M4），返回字段均不敏感
 	base.GET("/api/v1/system/info", sys.Info)
 
-	userH := NewUserHandler(d.Auth, d.Users)
+	userH := NewUserHandler(d.Auth, d.Users, d.Config.Admin.User)
 	sourceH := NewSourceHandler(d.Sources, d.SourceStore)
 	channelH := NewChannelHandler(d.Channels, d.ChannelStore)
 	templateH := NewTemplateHandler(d.Templates, d.TemplateStore)
@@ -136,6 +136,7 @@ func NewRouter(d *Deps) *gin.Engine {
 	{
 		admin.GET("/users", userAdminH.List)
 		admin.POST("/users", userAdminH.Create)
+		admin.PUT("/users/:id/password", userAdminH.ResetPassword)
 		admin.PUT("/users/:id", userAdminH.Update)
 		admin.DELETE("/users/:id", userAdminH.Delete)
 	}

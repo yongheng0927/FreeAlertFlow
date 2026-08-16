@@ -36,6 +36,7 @@ func TestNewRouterRegistersAllRoutes(t *testing.T) {
 			"/api/v1/users/me/password",
 			"/api/v1/sources/:id", "/api/v1/channels/:id",
 			"/api/v1/templates/:id", "/api/v1/rules/:id", "/api/v1/users/:id",
+			"/api/v1/users/:id/password",
 		},
 		"DELETE": {
 			"/api/v1/sources/:id", "/api/v1/channels/:id",

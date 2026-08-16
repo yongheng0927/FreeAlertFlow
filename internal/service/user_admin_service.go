@@ -134,6 +134,39 @@ func (s *UserAdminService) Update(ctx context.Context, targetID int64,
 	return target, nil
 }
 
+// ResetPassword 由初始管理员重置本地用户的密码（FR-5.4）：目标为纯 OAuth
+// 账号（无本地密码）时拒绝；成功后吊销目标的全部 refresh token
+func (s *UserAdminService) ResetPassword(ctx context.Context, actorID, targetID int64, newPw string) error {
+	actor, err := s.users.FindByID(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if actor == nil || !s.IsInitial(actor) {
+		return fmt.Errorf("%w: only the initial admin can reset passwords", ErrValidation)
+	}
+	if len(newPw) < 8 {
+		return validationErr("password must be at least 8 characters")
+	}
+	target, err := s.users.FindByID(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		return fmt.Errorf("%w: user %d", ErrNotFound, targetID)
+	}
+	if target.PasswordHash == nil {
+		return validationErr("oauth-only account has no local password to reset")
+	}
+	hash, err := password.Hash(newPw)
+	if err != nil {
+		return err
+	}
+	if err := s.users.UpdatePassword(ctx, targetID, hash); err != nil {
+		return err
+	}
+	return s.tokens.RevokeAllForUser(ctx, targetID)
+}
+
 // Delete 删除用户及其 refresh token 和 OAuth 身份绑定（硬删除，DB 设计
 // §11） 拒绝删除自己和最后一个 admin
 func (s *UserAdminService) Delete(ctx context.Context, actorID, targetID int64) error {

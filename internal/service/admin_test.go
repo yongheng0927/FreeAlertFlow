@@ -677,6 +677,44 @@ func TestUserAdminLastAdminGuards(t *testing.T) {
 	}
 }
 
+func TestUserAdminResetPassword(t *testing.T) {
+	svc, users, tokens, _ := newUserAdminService() // admin1 为初始管理员
+	initial := users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
+	otherAdmin := users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
+	local := users.addUser("alice", "pw-123456", model.RoleViewer, true)
+	oauthUser := users.addUser("ou_x", "", model.RoleViewer, true) // 无本地密码
+	tokens.byHash["h"] = &model.RefreshToken{UserID: local.ID, TokenHash: "h"}
+	ctx := context.Background()
+
+	// 初始管理员重置本地用户密码：成功且吊销其会话
+	if err := svc.ResetPassword(ctx, initial.ID, local.ID, "new-pw-123"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	u, _ := users.FindByID(ctx, local.ID)
+	if u.PasswordHash == nil || *u.PasswordHash == "new-pw-123" {
+		t.Error("password must be stored hashed")
+	}
+	if !tokens.byHash["h"].Revoked {
+		t.Error("target sessions must be revoked")
+	}
+
+	// 非初始管理员（即使是 admin 角色）无权重置
+	if err := svc.ResetPassword(ctx, otherAdmin.ID, local.ID, "new-pw-456"); !errors.Is(err, ErrValidation) {
+		t.Fatalf("non-initial admin: err = %v, want ErrValidation", err)
+	}
+	// 纯 OAuth 用户没有可重置的密码
+	if err := svc.ResetPassword(ctx, initial.ID, oauthUser.ID, "new-pw-456"); !errors.Is(err, ErrValidation) {
+		t.Fatalf("oauth user: err = %v, want ErrValidation", err)
+	}
+	// 短密码、目标不存在
+	if err := svc.ResetPassword(ctx, initial.ID, local.ID, "short"); !errors.Is(err, ErrValidation) {
+		t.Fatalf("short pw: err = %v", err)
+	}
+	if err := svc.ResetPassword(ctx, initial.ID, 999, "new-pw-456"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing user: err = %v", err)
+	}
+}
+
 func TestUserAdminDelete(t *testing.T) {
 	svc, users, tokens, oauth := newUserAdminService()
 	admin := users.addUser("admin1", "pw-123456", model.RoleAdmin, true)

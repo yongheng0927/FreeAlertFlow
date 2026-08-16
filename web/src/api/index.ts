@@ -262,3 +262,7 @@ export async function updateUser(id: number, patch: { role?: Role; enabled?: boo
 export async function deleteUser(id: number): Promise<void> {
   await api.delete(`/v1/users/${id}`)
 }
+
+export async function resetUserPassword(id: number, password: string): Promise<void> {
+  await api.put(`/v1/users/${id}/password`, { password })
+}

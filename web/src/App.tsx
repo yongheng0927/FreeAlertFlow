@@ -1,6 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { ConfigProvider, theme as antdTheme } from 'antd'
 
 import { runtimeConfig } from './config'
+import { getThemeMode, onThemeChange, type ThemeMode } from './theme'
 import AuthProvider from './auth/AuthContext'
 import { RequireAuth } from './components/RequireAuth'
 import AppLayout from './components/AppLayout'
@@ -17,8 +20,14 @@ import SettingsPage from './pages/SettingsPage'
 import UsersPage from './pages/UsersPage'
 
 export default function App() {
+  const [mode, setMode] = useState<ThemeMode>(getThemeMode)
+  useEffect(() => onThemeChange(() => setMode(getThemeMode())), [])
+
   return (
-    <BrowserRouter basename={runtimeConfig.base}>
+    <ConfigProvider
+      theme={{ algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}
+    >
+      <BrowserRouter basename={runtimeConfig.base}>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -57,6 +66,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ConfigProvider>
   )
 }

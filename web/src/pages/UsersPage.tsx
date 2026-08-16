@@ -17,7 +17,7 @@ import {
 import { PlusOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 
-import { createUser, deleteUser, listUsers, updateUser } from '../api'
+import { createUser, deleteUser, listUsers, resetUserPassword, updateUser } from '../api'
 import { errorMessage } from '../api/client'
 import type { Role, User } from '../api/types'
 import { formatTime } from '../utils'
@@ -40,6 +40,25 @@ export default function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm] = Form.useForm<{ username: string; password: string; role: Role }>()
+  const [resetUser, setResetUser] = useState<User | null>(null)
+  const [resetting, setResetting] = useState(false)
+  const [resetForm] = Form.useForm<{ password: string }>()
+
+  const onResetPassword = async () => {
+    if (!resetUser) return
+    const values = await resetForm.validateFields()
+    setResetting(true)
+    try {
+      await resetUserPassword(resetUser.id, values.password)
+      message.success(`已重置 ${resetUser.username} 的密码，其所有会话已强制下线`)
+      setResetUser(null)
+      resetForm.resetFields()
+    } catch (err) {
+      message.error(errorMessage(err, '重置密码失败'), 6)
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const onCreate = async () => {
     const values = await createForm.validateFields()
@@ -165,6 +184,18 @@ export default function UsersPage() {
           >
             改角色
           </Button>
+          {me?.is_initial && !u.is_initial && u.has_password && (
+            <Button
+              size="small"
+              type="link"
+              onClick={() => {
+                setResetUser(u)
+                resetForm.resetFields()
+              }}
+            >
+              重置密码
+            </Button>
+          )}
           <Popconfirm
             title="删除用户"
             description={`确认删除用户 ${u.username}？该操作不可恢复。`}
@@ -243,6 +274,30 @@ export default function UsersPage() {
                 { value: 'admin', label: 'Admin —— 管理员（含用户管理）' },
               ]}
             />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={resetUser ? `重置密码：${resetUser.username}` : ''}
+        open={resetUser !== null}
+        onOk={() => void onResetPassword()}
+        onCancel={() => setResetUser(null)}
+        confirmLoading={resetting}
+        okText="重置"
+        cancelText="取消"
+        destroyOnHidden
+      >
+        <Form form={resetForm} layout="vertical">
+          <Form.Item
+            name="password"
+            label="新密码"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 8, message: '密码至少 8 位' },
+            ]}
+          >
+            <Input.Password placeholder="至少 8 位，重置后该用户所有会话失效" autoComplete="new-password" />
           </Form.Item>
         </Form>
       </Modal>

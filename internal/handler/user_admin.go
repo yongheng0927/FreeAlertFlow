@@ -64,6 +64,30 @@ func (h *UserAdminHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, h.toView(user))
 }
 
+type resetPasswordRequest struct {
+	Password string `json:"password" binding:"required"`
+}
+
+// ResetPassword 处理 PUT /api/v1/users/:id/password：仅初始管理员可重置
+// 本地用户的密码
+func (h *UserAdminHandler) ResetPassword(c *gin.Context) {
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
+	var req resetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, "password is required")
+		return
+	}
+	actorID := c.GetInt64(middleware.CtxUserID)
+	if err := h.svc.ResetPassword(c.Request.Context(), actorID, id, req.Password); err != nil {
+		serviceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "password reset"})
+}
+
 type userUpdateRequest struct {
 	Role    *string `json:"role"`
 	Enabled *bool   `json:"enabled"`

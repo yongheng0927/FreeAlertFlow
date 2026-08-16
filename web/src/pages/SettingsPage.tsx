@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Descriptions, Form, Input, Tag, Typography, message } from 'antd'
+import { Button, Card, Descriptions, Form, Input, Switch, Tag, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 
 import { changePassword, getSystemInfo } from '../api'
 import { clearTokens, errorMessage } from '../api/client'
 import type { SystemInfo } from '../api/types'
+import { getThemeMode, setThemeMode } from '../theme'
 import { formatTime } from '../utils'
 import { useAuth } from '../auth/useAuth'
 
@@ -58,7 +59,20 @@ export default function SettingsPage() {
         </Descriptions>
       </Card>
 
-      <Card title="修改密码" style={{ marginBottom: 16 }}>
+      <Card title="界面设置" style={{ marginBottom: 16 }}>
+        <Descriptions column={1} size="small">
+          <Descriptions.Item label="深色模式">
+            <Switch
+              size="small"
+              checked={getThemeMode() === 'dark'}
+              onChange={(v) => setThemeMode(v ? 'dark' : 'light')}
+            />
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      {user?.has_password !== false && (
+        <Card title="修改密码" style={{ marginBottom: 16 }}>
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
           修改成功后所有已登录会话都会失效，需要重新登录。
         </Typography.Paragraph>
@@ -107,7 +121,8 @@ export default function SettingsPage() {
             </Button>
           </Form.Item>
         </Form>
-      </Card>
+        </Card>
+      )}
 
       {sysInfo && (
         <Card title="系统信息" size="small">

@@ -28,6 +28,8 @@ export interface User {
   avatar_url: string
   role: Role
   enabled: boolean
+  /** 是否有本地密码（纯 OAuth 用户为 false，不能改密码/被重置密码） */
+  has_password: boolean
   /** 是否受保护的初始管理员（不可改角色/禁用/删除），仅用户管理接口返回 */
   is_initial?: boolean
   last_login_at: string | null

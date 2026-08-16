@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -77,8 +76,8 @@ func TestOAuthAutoCreateUser(t *testing.T) {
 	if user.PasswordHash != nil {
 		t.Error("auto-created user must have no local password")
 	}
-	if user.Username != "张伟" {
-		t.Errorf("username = %q", user.Username)
+	if user.Username != "ou_abc123" {
+		t.Errorf("username = %q, want open_id", user.Username)
 	}
 	if pair.AccessToken == "" {
 		t.Error("token pair must be issued")
@@ -99,7 +98,7 @@ func TestOAuthAutoCreateUser(t *testing.T) {
 
 func TestOAuthAutoCreateUsernameUniqueness(t *testing.T) {
 	svc, users, _ := newOAuthTestEnv(testProfile, true, nil)
-	users.addUser("张伟", "pw-123456", model.RoleAdmin, true) // 名字已被占用
+	users.addUser("ou_abc123", "pw-123456", model.RoleAdmin, true) // open_id 被历史数据占用
 
 	user, err := func() (*model.User, error) {
 		u, _, err := svc.LoginWithCode(context.Background(), "code-1")
@@ -108,11 +107,8 @@ func TestOAuthAutoCreateUsernameUniqueness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoginWithCode: %v", err)
 	}
-	if user.Username == "张伟" {
-		t.Fatal("username must be disambiguated")
-	}
-	if !strings.HasPrefix(user.Username, "张伟-") {
-		t.Errorf("username = %q, want name + suffix", user.Username)
+	if user.Username != "ou_abc123-2" {
+		t.Errorf("username = %q, want open_id + 递增后缀", user.Username)
 	}
 }
 

@@ -14,13 +14,14 @@ import (
 
 // UserHandler 提供 /api/v1/users/me 端点
 type UserHandler struct {
-	auth  *service.AuthService
-	users service.UserStore
+	auth         *service.AuthService
+	users        service.UserStore
+	initialAdmin string // 初始管理员用户名，用于标记 is_initial
 }
 
 // NewUserHandler 创建 UserHandler
-func NewUserHandler(auth *service.AuthService, users service.UserStore) *UserHandler {
-	return &UserHandler{auth: auth, users: users}
+func NewUserHandler(auth *service.AuthService, users service.UserStore, initialAdmin string) *UserHandler {
+	return &UserHandler{auth: auth, users: users, initialAdmin: initialAdmin}
 }
 
 type userResponse struct {
@@ -32,6 +33,7 @@ type userResponse struct {
 	Role        string     `json:"role"`
 	Enabled     bool       `json:"enabled"`
 	IsInitial   bool       `json:"is_initial,omitempty"` // 是否受保护的初始管理员
+	HasPassword bool       `json:"has_password"`         // 是否有本地密码（纯 OAuth 用户为 false）
 	LastLoginAt *time.Time `json:"last_login_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
@@ -45,6 +47,7 @@ func toUserResponse(u *model.User) userResponse {
 		AvatarURL:   u.AvatarURL,
 		Role:        u.Role,
 		Enabled:     u.Enabled,
+		HasPassword: u.PasswordHash != nil,
 		LastLoginAt: u.LastLoginAt,
 		CreatedAt:   u.CreatedAt,
 	}
@@ -62,7 +65,9 @@ func (h *UserHandler) Me(c *gin.Context) {
 		fail(c, http.StatusUnauthorized, "account disabled or deleted")
 		return
 	}
-	c.JSON(http.StatusOK, toUserResponse(user))
+	v := toUserResponse(user)
+	v.IsInitial = h.initialAdmin != "" && user.Username == h.initialAdmin
+	c.JSON(http.StatusOK, v)
 }
 
 type changePasswordRequest struct {

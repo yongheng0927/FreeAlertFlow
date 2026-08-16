@@ -200,16 +200,10 @@ func (s *OAuthService) provisionUser(ctx context.Context, p *OAuthProfile) (*mod
 	return user, nil
 }
 
-// uniqueUsername 从用户资料推导出唯一登录名
+// uniqueUsername 用飞书 open_id 作为登录名：天然唯一且稳定，同一用户
+// 多次登录不会派生新账号（open_id 形如 ou_xxxx，本就含前缀）
 func (s *OAuthService) uniqueUsername(ctx context.Context, p *OAuthProfile) (string, error) {
-	base := strings.TrimSpace(p.Name)
-	if base == "" {
-		base = "feishu"
-	}
-	if len([]rune(base)) > 50 {
-		base = string([]rune(base)[:50])
-	}
-	candidate := base
+	candidate := p.OpenID
 	for i := 0; ; i++ {
 		existing, err := s.users.FindByUsername(ctx, candidate)
 		if err != nil {
@@ -218,14 +212,8 @@ func (s *OAuthService) uniqueUsername(ctx context.Context, p *OAuthProfile) (str
 		if existing == nil {
 			return candidate, nil
 		}
-		suffix := p.OpenID
-		if len(suffix) > 6 {
-			suffix = suffix[len(suffix)-6:]
-		}
-		if i == 0 {
-			candidate = fmt.Sprintf("%s-%s", base, suffix)
-		} else {
-			candidate = fmt.Sprintf("%s-%s-%d", base, suffix, i+1)
-		}
+		// open_id 撞名只可能是历史数据（旧版本用姓名+后缀生成的登录名），
+		// 递增后缀避让
+		candidate = fmt.Sprintf("%s-%d", p.OpenID, i+2)
 	}
 }
