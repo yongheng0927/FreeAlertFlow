@@ -21,7 +21,7 @@ func testConfig(rootURL string) *config.Config {
 
 func testDist() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":    &fstest.MapFile{Data: []byte("<html><head><title>t</title></head><body>spa</body></html>")},
+		"index.html":    &fstest.MapFile{Data: []byte(`<html><head><title>t</title><script src="./assets/app.js"></script></head><body>spa</body></html>`)},
 		"assets/app.js": &fstest.MapFile{Data: []byte("console.log(1)")},
 		"favicon.ico":   &fstest.MapFile{Data: []byte("ico")},
 	}
@@ -57,6 +57,19 @@ func TestStaticInjectsEmptyBaseWithoutSubPath(t *testing.T) {
 	h := newStatic(t, "http://localhost:8080/", testDist())
 	if !strings.Contains(string(h.indexBytes), `"base":"/"`) {
 		t.Errorf("base must be / : %s", h.indexBytes)
+	}
+}
+
+func TestStaticRewritesRelativeAssets(t *testing.T) {
+	// 子路径部署：./assets/* 必须改写为 base 下的绝对路径，否则深链接白屏
+	h := newStatic(t, "https://example.com/freealertflow/", testDist())
+	if !strings.Contains(string(h.indexBytes), `src="/freealertflow/assets/app.js"`) {
+		t.Errorf("assets must be rewritten under base: %s", h.indexBytes)
+	}
+	// 根路径部署：改写为 /assets/*
+	h = newStatic(t, "http://localhost:8080/", testDist())
+	if !strings.Contains(string(h.indexBytes), `src="/assets/app.js"`) {
+		t.Errorf("assets must be rewritten to root: %s", h.indexBytes)
 	}
 }
 
