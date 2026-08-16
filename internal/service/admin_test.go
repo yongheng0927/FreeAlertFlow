@@ -552,6 +552,48 @@ func newUserAdminService() (*UserAdminService, *fakeUserStore, *fakeTokenStore, 
 	return NewUserAdminService(users, tokens, oauth), users, tokens, oauth
 }
 
+func TestUserAdminCreate(t *testing.T) {
+	svc, users, _, _ := newUserAdminService()
+	ctx := context.Background()
+
+	// 缺省角色为 viewer，密码以哈希存储
+	u, err := svc.Create(ctx, "bob", "pw-123456", "")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if u.Role != model.RoleViewer || !u.Enabled {
+		t.Errorf("default role/enabled: %+v", u)
+	}
+	if u.PasswordHash == nil || *u.PasswordHash == "pw-123456" {
+		t.Error("password must be stored hashed")
+	}
+
+	// 显式角色
+	admin, err := svc.Create(ctx, "ops", "pw-123456", "admin")
+	if err != nil || admin.Role != model.RoleAdmin {
+		t.Fatalf("create admin: %v, %+v", err, admin)
+	}
+
+	// 用户名去空白、查重
+	if _, err := svc.Create(ctx, " bob ", "pw-123456", ""); !errors.Is(err, ErrDuplicateName) {
+		t.Fatalf("duplicate: err = %v, want ErrDuplicateName", err)
+	}
+	// 非法输入
+	bad := [][3]string{
+		{"", "pw-123456", "viewer"},     // 空用户名
+		{"x", "short", "viewer"},        // 密码不足 8 位
+		{"x", "pw-123456", "superroot"}, // 非法角色
+	}
+	for i, in := range bad {
+		if _, err := svc.Create(ctx, in[0], in[1], in[2]); !errors.Is(err, ErrValidation) {
+			t.Errorf("case %d: err = %v, want ErrValidation", i, err)
+		}
+	}
+	if n, _ := users.Count(ctx); n != 2 {
+		t.Errorf("users = %d, want 2 (failed creates must not persist)", n)
+	}
+}
+
 func TestUserAdminUpdateRole(t *testing.T) {
 	svc, users, _, _ := newUserAdminService()
 	users.addUser("admin1", "pw-123456", model.RoleAdmin, true)

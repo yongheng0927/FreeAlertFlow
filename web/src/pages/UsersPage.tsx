@@ -3,6 +3,8 @@ import {
   Avatar,
   Button,
   Card,
+  Form,
+  Input,
   Modal,
   Popconfirm,
   Select,
@@ -12,10 +14,10 @@ import {
   Tag,
   message,
 } from 'antd'
-import { ReloadOutlined, UserOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 
-import { deleteUser, listUsers, updateUser } from '../api'
+import { createUser, deleteUser, listUsers, updateUser } from '../api'
 import { errorMessage } from '../api/client'
 import type { Role, User } from '../api/types'
 import { formatTime } from '../utils'
@@ -35,6 +37,25 @@ export default function UsersPage() {
   const [roleModalUser, setRoleModalUser] = useState<User | null>(null)
   const [roleValue, setRoleValue] = useState<Role>('viewer')
   const [saving, setSaving] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createForm] = Form.useForm<{ username: string; password: string; role: Role }>()
+
+  const onCreate = async () => {
+    const values = await createForm.validateFields()
+    setCreating(true)
+    try {
+      await createUser(values)
+      message.success(`已创建用户 ${values.username}`)
+      setCreateOpen(false)
+      createForm.resetFields()
+      void load()
+    } catch (err) {
+      message.error(errorMessage(err, '创建用户失败'), 6)
+    } finally {
+      setCreating(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -163,9 +184,14 @@ export default function UsersPage() {
     <Card
       title="用户管理"
       extra={
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-          刷新
-        </Button>
+        <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            新建用户
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+            刷新
+          </Button>
+        </Space>
       }
     >
       <Table<User>
@@ -175,6 +201,49 @@ export default function UsersPage() {
         dataSource={data}
         pagination={false}
       />
+
+      <Modal
+        title="新建用户"
+        open={createOpen}
+        onOk={() => void onCreate()}
+        onCancel={() => setCreateOpen(false)}
+        confirmLoading={creating}
+        okText="创建"
+        cancelText="取消"
+        destroyOnHidden
+      >
+        <Form form={createForm} layout="vertical" initialValues={{ role: 'viewer' }}>
+          <Form.Item
+            name="username"
+            label="用户名"
+            rules={[
+              { required: true, message: '请输入用户名' },
+              { max: 64, message: '用户名最长 64 个字符' },
+            ]}
+          >
+            <Input placeholder="登录用户名" autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="初始密码"
+            rules={[
+              { required: true, message: '请输入初始密码' },
+              { min: 8, message: '密码至少 8 位' },
+            ]}
+          >
+            <Input.Password placeholder="至少 8 位，用户登录后可自行修改" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item name="role" label="角色">
+            <Select
+              options={[
+                { value: 'viewer', label: 'Viewer —— 只读（查看告警/投递/仪表盘）' },
+                { value: 'editor', label: 'Editor —— 可信运维（配置接入源/渠道/模板/规则，可重发）' },
+                { value: 'admin', label: 'Admin —— 管理员（含用户管理）' },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={roleModalUser ? `修改角色：${roleModalUser.username}` : ''}

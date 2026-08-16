@@ -135,6 +135,7 @@ func NewRouter(d *Deps) *gin.Engine {
 	admin := v1.Group("", middleware.RequireRole(model.RoleAdmin))
 	{
 		admin.GET("/users", userAdminH.List)
+		admin.POST("/users", userAdminH.Create)
 		admin.PUT("/users/:id", userAdminH.Update)
 		admin.DELETE("/users/:id", userAdminH.Delete)
 	}

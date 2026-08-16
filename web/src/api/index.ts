@@ -249,6 +249,11 @@ export async function listUsers(page = 1, pageSize = 100): Promise<ListEnvelope<
   return data
 }
 
+export async function createUser(input: { username: string; password: string; role?: Role }): Promise<User> {
+  const { data } = await api.post<User>('/v1/users', input)
+  return data
+}
+
 export async function updateUser(id: number, patch: { role?: Role; enabled?: boolean }): Promise<User> {
   const { data } = await api.put<User>(`/v1/users/${id}`, patch)
   return data

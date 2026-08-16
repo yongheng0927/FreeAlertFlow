@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
+	"github.com/yongheng0927/fenghuo/internal/pkg/password"
 )
 
 // 用户管理的守卫错误（FR-5.4，仅 admin）
@@ -29,6 +31,48 @@ func NewUserAdminService(users UserStore, tokens RefreshTokenStore, oauth OAuthI
 // ValidRole 报告 role 是否为 viewer/editor/admin 之一
 func ValidRole(role string) bool {
 	return role == model.RoleViewer || role == model.RoleEditor || role == model.RoleAdmin
+}
+
+// Create 由 admin 创建本地账号（FR-5.4）：用户名唯一，初始密码至少 8 位
+// （与修改密码的策略一致），角色缺省 viewer
+func (s *UserAdminService) Create(ctx context.Context, username, pw, role string) (*model.User, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, validationErr("username is required")
+	}
+	if len(username) > 64 {
+		return nil, validationErr("username must be at most 64 characters")
+	}
+	if len(pw) < 8 {
+		return nil, validationErr("password must be at least 8 characters")
+	}
+	if role == "" {
+		role = model.RoleViewer
+	}
+	if !ValidRole(role) {
+		return nil, validationErr("role must be viewer, editor or admin")
+	}
+	existing, err := s.users.FindByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("%w: %q", ErrDuplicateName, username)
+	}
+	hash, err := password.Hash(pw)
+	if err != nil {
+		return nil, err
+	}
+	user := &model.User{
+		Username:     username,
+		PasswordHash: &hash,
+		Role:         role,
+		Enabled:      true,
+	}
+	if err := s.users.Create(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 // Update 修改用户的角色和/或启用状态 禁用的同时吊销该用户全部 refresh

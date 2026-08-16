@@ -35,6 +35,27 @@ func (h *UserAdminHandler) List(c *gin.Context) {
 	listJSON(c, views, total, page, size)
 }
 
+type userCreateRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Role     string `json:"role"` // 缺省 viewer
+}
+
+// Create 处理 POST /api/v1/users：admin 创建本地账号
+func (h *UserAdminHandler) Create(c *gin.Context) {
+	var req userCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, "username and password are required")
+		return
+	}
+	user, err := h.svc.Create(c.Request.Context(), req.Username, req.Password, req.Role)
+	if err != nil {
+		serviceError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, toUserResponse(user))
+}
+
 type userUpdateRequest struct {
 	Role    *string `json:"role"`
 	Enabled *bool   `json:"enabled"`
