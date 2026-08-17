@@ -23,7 +23,7 @@ docker compose up -d --build
 
 ## 配置
 
-全部配置项见 [config.example.yaml](config.example.yaml)，支持环境变量（`FENGHUO_` 前缀）与 `config.yaml` 两种方式，优先级：环境变量 > config.yaml > 默认值。
+全部配置经环境变量注入（`FENGHUO_` 前缀），完整环境变量表见 [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)。本地开发也可以使用 `config.yaml`（已被 gitignore，不提供示例文件），配置键与环境变量的映射规则为点号换下划线（如 `server.http_addr` ↔ `FENGHUO_SERVER_HTTP_ADDR`）；优先级：环境变量 > config.yaml > 默认值。
 
 ## 文档
 
