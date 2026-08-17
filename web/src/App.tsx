@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage'
 import OAuthCallbackPage from './pages/OAuthCallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import AlertsPage from './pages/AlertsPage'
+import AlertDetailPage from './pages/AlertDetailPage'
 import DeliveriesPage from './pages/DeliveriesPage'
 import SourcesPage from './pages/SourcesPage'
 import ChannelsPage from './pages/ChannelsPage'
@@ -41,6 +42,7 @@ export default function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/alerts/:id" element={<AlertDetailPage />} />
             <Route
               path="/deliveries"
               element={

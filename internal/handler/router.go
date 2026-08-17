@@ -30,6 +30,7 @@ type Deps struct {
 	RuleStore     service.RuleStore
 	AlertStore    service.AlertStore
 	DeliveryStore service.DeliveryStore
+	StatsStore    service.StatsStore
 
 	Channels  *service.ChannelService
 	Templates *service.TemplateService
@@ -86,6 +87,7 @@ func NewRouter(d *Deps) *gin.Engine {
 	ruleH := NewRuleHandler(d.Rules, d.RuleStore)
 	alertH := NewAlertHandler(d.AlertStore, d.DeliveryStore)
 	deliveryH := NewDeliveryHandler(d.DeliveryStore, d.Deliverer)
+	statsH := NewStatsHandler(d.StatsStore)
 	userAdminH := NewUserAdminHandler(d.Users, d.UserAdmin)
 
 	v1 := base.Group("/api/v1", middleware.JWTAuth(d.JWT, d.Users))
@@ -104,6 +106,7 @@ func NewRouter(d *Deps) *gin.Engine {
 		v1.GET("/rules/:id", ruleH.Get)
 		v1.GET("/alerts", alertH.List)
 		v1.GET("/alerts/:id", alertH.Get)
+		v1.GET("/stats/dashboard", statsH.Dashboard)
 	}
 
 	editor := v1.Group("", middleware.RequireRole(model.RoleEditor))

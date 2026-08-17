@@ -74,6 +74,7 @@ func run() error {
 	channelStore := service.NewGormChannelStore(db)
 	templateStore := service.NewGormTemplateStore(db)
 	deliveryStore := service.NewGormDeliveryStore(db)
+	statsStore := service.NewGormStatsStore(db)
 
 	jwtMgr := fafjwt.NewManager([]byte(jwtSecret), cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authSvc := service.NewAuthService(userStore, tokenStore, jwtMgr)
@@ -147,6 +148,7 @@ func run() error {
 		RuleStore:     ruleStore,
 		AlertStore:    alertStore,
 		DeliveryStore: deliveryStore,
+		StatsStore:    statsStore,
 		Channels:      channelSvc,
 		Templates:     templateSvc,
 		Rules:         ruleSvc,

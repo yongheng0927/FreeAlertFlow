@@ -59,6 +59,7 @@ export default function LoginPage() {
     >
       <Card style={{ width: 400, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <img src="/logo.svg" alt="烽火台" style={{ width: 56, height: 56, marginBottom: 8 }} />
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
             烽火台
           </Typography.Title>

@@ -10,8 +10,22 @@ export function formatTime(t?: string | null): string {
 }
 
 export async function copyText(text: string, tip = '已复制到剪贴板'): Promise<void> {
+  // navigator.clipboard 仅在安全上下文（HTTPS/localhost）可用；HTTP 部署
+  //（如内网 IP 直连）下退化为隐藏 textarea + execCommand
   try {
-    await navigator.clipboard.writeText(text)
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      if (!ok) throw new Error('execCommand copy failed')
+    }
     message.success(tip)
   } catch {
     message.warning('复制失败，请手动复制')

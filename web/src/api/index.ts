@@ -4,6 +4,7 @@ import type {
   AlertDetail,
   AlertFilterParams,
   Channel,
+  DashboardStats,
   Delivery,
   DeliveryFilterParams,
   ListEnvelope,
@@ -238,6 +239,12 @@ export async function listDeliveries(params: DeliveryFilterParams): Promise<List
 
 export async function resendDelivery(id: number): Promise<ResendResult> {
   const { data } = await api.post<ResendResult>(`/v1/deliveries/${id}/resend`)
+  return data
+}
+
+// ---- 仪表盘统计 ----
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const { data } = await api.get<DashboardStats>('/v1/stats/dashboard')
   return data
 }
 

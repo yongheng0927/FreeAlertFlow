@@ -1,32 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Button,
-  Card,
-  DatePicker,
-  Descriptions,
-  Drawer,
-  Form,
-  Input,
-  Select,
-  Table,
-  Tabs,
-  Tooltip,
-  Typography,
-  message,
-} from 'antd'
+import { useNavigate } from 'react-router-dom'
+import { Button, Card, DatePicker, Form, Input, Select, Table, Tooltip, Typography, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 
-import { getAlert, listAlerts, listChannels, listSources } from '../api'
+import { listAlerts, listChannels, listSources } from '../api'
 import { errorMessage } from '../api/client'
-import type { Alert, AlertDetail, Channel, Delivery, Source } from '../api/types'
-import {
-  AlertStatusTag,
-  DeliveryStatusTag,
-  DispositionTag,
-  SeverityTag,
-} from '../components/tags'
+import type { Alert, Channel, Source } from '../api/types'
+import { AlertStatusTag, DispositionTag, SeverityTag } from '../components/tags'
 import { formatTime } from '../utils'
 
 interface FilterValues {
@@ -37,56 +19,9 @@ interface FilterValues {
   range?: [Dayjs | null, Dayjs | null] | null
 }
 
-function KvTable({ data }: { data: Record<string, string> }) {
-  const rows = Object.entries(data ?? {}).map(([k, v]) => ({ key: k, value: v }))
-  if (rows.length === 0) return <Typography.Text type="secondary">无</Typography.Text>
-  return (
-    <Table
-      size="small"
-      rowKey="key"
-      pagination={false}
-      dataSource={rows}
-      columns={[
-        { title: '键', dataIndex: 'key', width: 200 },
-        { title: '值', dataIndex: 'value' },
-      ]}
-    />
-  )
-}
-
-const deliveryColumns: ColumnsType<Delivery> = [
-  { title: '渠道', dataIndex: 'channel_name', width: 140 },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    width: 80,
-    render: (s: string) => <DeliveryStatusTag status={s} />,
-  },
-  {
-    title: '结果',
-    width: 220,
-    render: (_, d) =>
-      d.response_msg ? (
-        <Typography.Text type={d.status === 'failed' ? 'danger' : undefined}>
-          code={d.response_code} {d.response_msg}
-        </Typography.Text>
-      ) : (
-        `HTTP ${d.http_status}`
-      ),
-  },
-  { title: '耗时', dataIndex: 'duration_ms', width: 90, render: (v: number) => `${v} ms` },
-  { title: '尝试', dataIndex: 'attempts', width: 60 },
-  {
-    title: '触发',
-    dataIndex: 'trigger_type',
-    width: 80,
-    render: (t: string) => (t === 'manual' ? '手动' : '自动'),
-  },
-  { title: '时间', dataIndex: 'sent_at', width: 170, render: formatTime },
-]
-
 export default function AlertsPage() {
   const [form] = Form.useForm<FilterValues>()
+  const navigate = useNavigate()
   const [data, setData] = useState<Alert[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -94,11 +29,6 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(false)
   const [sources, setSources] = useState<Source[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
-
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [detail, setDetail] = useState<AlertDetail | null>(null)
-  const [deliveries, setDeliveries] = useState<Delivery[]>([])
-  const [detailLoading, setDetailLoading] = useState(false)
 
   const sourceName = useMemo(() => {
     const m = new Map(sources.map((s) => [s.id, s.name]))
@@ -143,22 +73,6 @@ export default function AlertsPage() {
     void load(1, pageSize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const openDetail = async (row: Alert) => {
-    setDrawerOpen(true)
-    setDetailLoading(true)
-    setDetail(null)
-    setDeliveries([])
-    try {
-      const r = await getAlert(row.id)
-      setDetail(r.alert)
-      setDeliveries(r.deliveries)
-    } catch (err) {
-      message.error(errorMessage(err, '加载告警详情失败'))
-    } finally {
-      setDetailLoading(false)
-    }
-  }
 
   const columns: ColumnsType<Alert> = [
     {
@@ -265,9 +179,9 @@ export default function AlertsPage() {
         columns={columns}
         dataSource={data}
         onRow={(row) => ({
-          onClick: () => void openDetail(row),
+          onClick: () => navigate(`/alerts/${row.id}`),
           onKeyDown: (e) => {
-            if (e.key === 'Enter') void openDetail(row)
+            if (e.key === 'Enter') navigate(`/alerts/${row.id}`)
           },
           tabIndex: 0,
           style: { cursor: 'pointer' },
@@ -281,74 +195,6 @@ export default function AlertsPage() {
           onChange: (p, ps) => void load(p, ps),
         }}
       />
-
-      <Drawer
-        title={detail ? `告警详情：${detail.alertname}` : '告警详情'}
-        width={860}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        loading={detailLoading}
-      >
-        {detail && (
-          <>
-            <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="状态">
-                <AlertStatusTag status={detail.status} />
-              </Descriptions.Item>
-              <Descriptions.Item label="级别">
-                <SeverityTag severity={detail.severity} />
-              </Descriptions.Item>
-              <Descriptions.Item label="来源">{sourceName(detail.source_id)}</Descriptions.Item>
-              <Descriptions.Item label="处置">
-                <DispositionTag disposition={detail.disposition} />
-              </Descriptions.Item>
-              <Descriptions.Item label="指纹" span={2}>
-                <Typography.Text code>{detail.fingerprint}</Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="开始时间">{formatTime(detail.starts_at)}</Descriptions.Item>
-              <Descriptions.Item label="结束时间">{formatTime(detail.ends_at)}</Descriptions.Item>
-              <Descriptions.Item label="接收时间" span={2}>
-                {formatTime(detail.received_at)}
-              </Descriptions.Item>
-            </Descriptions>
-            <Tabs
-              items={[
-                {
-                  key: 'labels',
-                  label: 'Labels',
-                  children: <KvTable data={detail.labels} />,
-                },
-                {
-                  key: 'annotations',
-                  label: 'Annotations',
-                  children: <KvTable data={detail.annotations} />,
-                },
-                {
-                  key: 'raw',
-                  label: '原始 Payload',
-                  children: (
-                    <pre className="json-view">{JSON.stringify(detail.raw_payload, null, 2)}</pre>
-                  ),
-                },
-                {
-                  key: 'deliveries',
-                  label: `投递记录（${deliveries.length}）`,
-                  children: (
-                    <Table<Delivery>
-                      rowKey="id"
-                      size="small"
-                      columns={deliveryColumns}
-                      dataSource={deliveries}
-                      pagination={false}
-                      locale={{ emptyText: '该告警没有投递记录（可能被去重或未匹配路由规则）' }}
-                    />
-                  ),
-                },
-              ]}
-            />
-          </>
-        )}
-      </Drawer>
     </Card>
   )
 }

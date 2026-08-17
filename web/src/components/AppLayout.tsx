@@ -83,12 +83,14 @@ export default function AppLayout() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: 8,
               color: '#fff',
               fontSize: 17,
               fontWeight: 600,
               letterSpacing: 0.5,
             }}
           >
+            <img src="/logo.svg" alt="烽火台" style={{ width: 28, height: 28 }} />
             烽火台
           </div>
           <Menu

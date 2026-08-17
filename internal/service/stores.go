@@ -127,6 +127,21 @@ type DeliveryStore interface {
 	ListByAlertID(ctx context.Context, alertID int64) ([]model.Delivery, error)
 }
 
+// DashboardStats 是仪表盘聚合统计（GET /api/v1/stats/dashboard）
+type DashboardStats struct {
+	AlertsTotal           int64 `json:"alerts_total"`
+	AlertsToday           int64 `json:"alerts_today"`
+	AlertsWeek            int64 `json:"alerts_week"`
+	FailedDeliveriesToday int64 `json:"failed_deliveries_today"`
+	UnmatchedAlertsToday  int64 `json:"unmatched_alerts_today"`
+}
+
+// StatsStore 抽象仪表盘统计查询；todayStart/weekStart 由调用方按本地时区
+// 算好传入，store 不猜时区语义
+type StatsStore interface {
+	Dashboard(ctx context.Context, todayStart, weekStart time.Time) (*DashboardStats, error)
+}
+
 // OAuthIdentityStore 抽象 OAuth 身份绑定的持久化
 type OAuthIdentityStore interface {
 	// FindByProviderUserID 在没有绑定身份时返回 (nil, nil)

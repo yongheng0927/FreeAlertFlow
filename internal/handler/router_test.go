@@ -22,6 +22,7 @@ func TestNewRouterRegistersAllRoutes(t *testing.T) {
 			"/api/v1/templates", "/api/v1/templates/:id",
 			"/api/v1/rules", "/api/v1/rules/:id",
 			"/api/v1/alerts", "/api/v1/alerts/:id",
+			"/api/v1/stats/dashboard",
 			"/api/v1/deliveries", "/api/v1/users",
 		},
 		"POST": {

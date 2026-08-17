@@ -176,3 +176,12 @@ export interface DeliveryFilterParams {
   page?: number
   page_size?: number
 }
+
+/** GET /v1/stats/dashboard 的响应 */
+export interface DashboardStats {
+  alerts_total: number
+  alerts_today: number
+  alerts_week: number
+  failed_deliveries_today: number
+  unmatched_alerts_today: number
+}
