@@ -435,3 +435,54 @@ func TestDispatchChannelDisabledTreatedAsUnmatched(t *testing.T) {
 		t.Errorf("sender calls = %d, want 0", env.sender.calls)
 	}
 }
+
+func TestDrainWaitsForAsyncDispatch(t *testing.T) {
+	sender := &fakeSender{results: []SendResult{okResult()}, delay: 50 * time.Millisecond}
+	env := newAlertTestEnv(t, 5*time.Minute, sender)
+	env.svc.async = true // 走生产路径：分发在后台 goroutine 执行
+	env.addSource("tok123", true)
+	env.rules.rules = []model.RoutingRule{
+		{ID: 1, SourceID: 1, Priority: 10, MatchLabels: json.RawMessage(`{}`), ChannelID: 7, Enabled: true},
+	}
+	env.channels.byID[7] = &model.Channel{ID: 7, Name: "默认群", Type: "feishu", Enabled: true}
+
+	if _, _, err := env.svc.Ingest(context.Background(), "tok123", []byte(sampleWebhookJSON)); err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := env.svc.Drain(ctx); err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	// Drain 返回时进行中的分发必须已完成
+	if got := sender.callCount(); got != 1 {
+		t.Errorf("sender calls = %d, want 1", got)
+	}
+	if got := env.alerts.byID[1].Disposition; got != "delivered" {
+		t.Errorf("disposition = %q, want delivered", got)
+	}
+}
+
+func TestDrainTimeout(t *testing.T) {
+	sender := &fakeSender{results: []SendResult{okResult()}, delay: 500 * time.Millisecond}
+	env := newAlertTestEnv(t, 5*time.Minute, sender)
+	env.svc.async = true
+	env.addSource("tok123", true)
+	env.rules.rules = []model.RoutingRule{
+		{ID: 1, SourceID: 1, Priority: 10, MatchLabels: json.RawMessage(`{}`), ChannelID: 7, Enabled: true},
+	}
+	env.channels.byID[7] = &model.Channel{ID: 7, Name: "默认群", Type: "feishu", Enabled: true}
+
+	if _, _, err := env.svc.Ingest(context.Background(), "tok123", []byte(sampleWebhookJSON)); err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := env.svc.Drain(ctx); err == nil {
+		t.Fatal("Drain should time out while a slow dispatch is still in flight")
+	}
+	// 超时返回不取消分发本身，后台 goroutine 最终仍会完成
+	if err := env.svc.Drain(context.Background()); err != nil {
+		t.Fatalf("second Drain after dispatch finished: %v", err)
+	}
+}

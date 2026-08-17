@@ -188,6 +188,16 @@ func run() error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return err
 	}
+
+	// 等待进行中的异步投递完成（滚动更新时不打断正在重试的投递）；
+	// 上限对齐单次投递最坏耗时（timeout × 尝试次数）+ 余量，防止卡死退出
+	drainTimeout := cfg.Channel.HTTPTimeout*time.Duration(cfg.Channel.RetryMax+1) + 5*time.Second
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), drainTimeout)
+	defer drainCancel()
+	if err := alertSvc.Drain(drainCtx); err != nil {
+		slog.Warn("drain in-flight dispatches timed out, forcing exit",
+			"timeout", drainTimeout)
+	}
 	slog.Info("shutdown complete")
 	return nil
 }

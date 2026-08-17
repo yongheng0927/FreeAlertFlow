@@ -79,9 +79,13 @@ type fakeSender struct {
 	results  []SendResult
 	calls    int
 	payloads [][]byte
+	delay    time.Duration // 非零时 Send 前睡眠，模拟慢渠道
 }
 
 func (f *fakeSender) Send(_ context.Context, _ *model.Channel, payload []byte) SendResult {
+	if f.delay > 0 {
+		time.Sleep(f.delay)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
@@ -91,6 +95,13 @@ func (f *fakeSender) Send(_ context.Context, _ *model.Channel, payload []byte) S
 		i = len(f.results) - 1
 	}
 	return f.results[i]
+}
+
+// callCount 返回已处理的 Send 调用数（并发安全）
+func (f *fakeSender) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
 }
 
 func okResult() SendResult        { return SendResult{HTTPStatus: 200, Code: 0, Msg: "success"} }

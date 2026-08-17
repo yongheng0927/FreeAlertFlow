@@ -31,7 +31,9 @@ type AlertService struct {
 	// async 控制分发是否在 goroutine 中执行，测试置为 false 以同步驱动
 	// Dispatch
 	async bool
-	now   func() time.Time
+	// drainWG 跟踪进行中的异步分发，优雅退出时经 Drain 有界等待
+	drainWG sync.WaitGroup
+	now     func() time.Time
 }
 
 // NewAlertService 创建 AlertService dedupWindow 为 0 时关闭去重
@@ -115,11 +117,31 @@ func (s *AlertService) Ingest(ctx context.Context, token string, body []byte) (*
 	metrics.ObserveAlertsReceived(src.Name, len(ids))
 
 	if s.async {
-		go s.dispatchAll(ids, src.Name)
+		s.drainWG.Add(1)
+		go func() {
+			defer s.drainWG.Done()
+			s.dispatchAll(ids, src.Name)
+		}()
 	} else {
 		s.dispatchAll(ids, src.Name)
 	}
 	return src, len(ids), nil
+}
+
+// Drain 等待进行中的异步分发全部完成，ctx 超时则返回错误（调用方据此
+// 决定继续等待还是强制退出）
+func (s *AlertService) Drain(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		s.drainWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // dispatchAll 在后台逐条处理已入库的告警
