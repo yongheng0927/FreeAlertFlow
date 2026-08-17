@@ -1,0 +1,9 @@
+# 统一文本文件以 LF 入库/检出（Windows 下 core.autocrlf 会导致 CRLF 检出）
+* text=auto eol=lf
+
+# 二进制
+*.exe binary
+*.png binary
+*.ico binary
+*.woff  binary
+*.woff2 binary

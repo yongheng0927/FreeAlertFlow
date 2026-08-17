@@ -97,10 +97,12 @@ func TestBuiltinTemplatesMatchMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read migration: %v", err)
 	}
+	// Windows 检出（core.autocrlf=true）会带入 CRLF，比较前统一归一为 LF
+	sqlText := strings.ReplaceAll(string(sql), "\r\n", "\n")
 	re := regexp.MustCompile(`(?s)\('([^']+)', '([^']+)', \$faf\$\n(.*?)\$faf\$, TRUE,`)
 	type key struct{ name, channelType string }
 	rows := map[key]string{}
-	for _, m := range re.FindAllStringSubmatch(string(sql), -1) {
+	for _, m := range re.FindAllStringSubmatch(sqlText, -1) {
 		rows[key{m[1], m[2]}] = strings.TrimSpace(m[3])
 	}
 	builtins, err := BuiltinTemplates()
@@ -114,7 +116,7 @@ func TestBuiltinTemplatesMatchMigration(t *testing.T) {
 			t.Errorf("migration 0005 has no row for %q/%q", b.Name, b.ChannelType)
 			continue
 		}
-		if content != strings.TrimSpace(b.Content) {
+		if content != strings.TrimSpace(strings.ReplaceAll(b.Content, "\r\n", "\n")) {
 			t.Errorf("migration 0005 content of %q/%q differs from embedded template", b.Name, b.ChannelType)
 		}
 		delete(rows, k)
