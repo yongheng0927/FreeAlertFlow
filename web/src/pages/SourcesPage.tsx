@@ -47,6 +47,9 @@ export default function SourcesPage() {
   const [data, setData] = useState<Source[]>([])
   const [loading, setLoading] = useState(false)
   const [rootUrl, setRootUrl] = useState('')
+  const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [rotatingId, setRotatingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Source | null>(null)
@@ -116,16 +119,22 @@ export default function SourcesPage() {
   }
 
   const onDelete = async (s: Source) => {
+    if (deletingId !== null) return
+    setDeletingId(s.id)
     try {
       await deleteSource(s.id)
       message.success('已删除')
       void load()
     } catch (err) {
       message.error(errorMessage(err, '删除失败'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
   const onRotate = async (s: Source) => {
+    if (rotatingId !== null) return
+    setRotatingId(s.id)
     try {
       const updated = await rotateSourceToken(s.id)
       message.success('Token 已重置，旧的 Webhook URL 已失效')
@@ -133,15 +142,21 @@ export default function SourcesPage() {
       void load()
     } catch (err) {
       message.error(errorMessage(err, '重置失败'))
+    } finally {
+      setRotatingId(null)
     }
   }
 
   const onToggleEnabled = async (s: Source, enabled: boolean) => {
+    if (togglingId !== null) return
+    setTogglingId(s.id)
     try {
       await updateSource(s.id, { enabled })
       void load()
     } catch (err) {
       message.error(errorMessage(err, '操作失败'))
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -172,7 +187,12 @@ export default function SourcesPage() {
       width: 80,
       render: (enabled: boolean, s) =>
         canWrite ? (
-          <Switch size="small" checked={enabled} onChange={(v) => void onToggleEnabled(s, v)} />
+          <Switch
+            size="small"
+            checked={enabled}
+            loading={togglingId === s.id}
+            onChange={(v) => void onToggleEnabled(s, v)}
+          />
         ) : (
           <Tag color={enabled ? 'green' : 'default'}>{enabled ? '启用' : '停用'}</Tag>
         ),
@@ -196,7 +216,7 @@ export default function SourcesPage() {
                   title="重置 Token"
                   description="重置后旧 Webhook URL 立即失效，需同步修改 Alertmanager 配置。确认继续？"
                   okText="重置"
-                  okButtonProps={{ danger: true }}
+                  okButtonProps={{ danger: true, loading: rotatingId === s.id }}
                   cancelText="取消"
                   onConfirm={() => void onRotate(s)}
                 >
@@ -208,7 +228,7 @@ export default function SourcesPage() {
                   title="删除接入源"
                   description="删除后该 Webhook 立即不可用。确认删除？"
                   okText="删除"
-                  okButtonProps={{ danger: true }}
+                  okButtonProps={{ danger: true, loading: deletingId === s.id }}
                   cancelText="取消"
                   onConfirm={() => void onDelete(s)}
                 >

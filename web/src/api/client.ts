@@ -95,6 +95,8 @@ export function errorMessage(err: unknown, fallback = '请求失败'): string {
     if (data?.error) return data.error
     if (err.response?.status === 403) return '没有权限执行此操作'
     if (err.response?.status === 404) return '资源不存在'
+    // 无响应（断网/跨域/服务不可达）时给出明确提示，而不是笼统的「请求失败」
+    if (!err.response) return '网络异常，请检查连接后重试'
   }
   return fallback
 }

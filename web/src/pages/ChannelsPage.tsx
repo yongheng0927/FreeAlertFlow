@@ -12,6 +12,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -77,6 +78,8 @@ export default function ChannelsPage() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(false)
   const [testingId, setTestingId] = useState<number | null>(null)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Channel | null>(null)
@@ -173,12 +176,16 @@ export default function ChannelsPage() {
   }
 
   const onDelete = async (c: Channel) => {
+    if (deletingId !== null) return
+    setDeletingId(c.id)
     try {
       await deleteChannel(c.id)
       message.success('已删除')
       void load()
     } catch (err) {
       message.error(errorMessage(err, '删除失败'), 6)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -210,16 +217,31 @@ export default function ChannelsPage() {
   }
 
   const onToggleEnabled = async (c: Channel, enabled: boolean) => {
+    if (togglingId !== null) return
+    setTogglingId(c.id)
     try {
       await updateChannel(c.id, { enabled })
       void load()
     } catch (err) {
       message.error(errorMessage(err, '操作失败'))
+    } finally {
+      setTogglingId(null)
     }
   }
 
   const columns: ColumnsType<Channel> = [
-    { title: '名称', dataIndex: 'name', width: 150 },
+    {
+      title: '名称',
+      dataIndex: 'name',
+      width: 150,
+      render: (v: string) => (
+        <Tooltip title={v}>
+          <Typography.Text ellipsis style={{ maxWidth: 130 }}>
+            {v}
+          </Typography.Text>
+        </Tooltip>
+      ),
+    },
     {
       title: '类型',
       dataIndex: 'type',
@@ -257,7 +279,12 @@ export default function ChannelsPage() {
       width: 80,
       render: (enabled: boolean, c) =>
         canWrite ? (
-          <Switch size="small" checked={enabled} onChange={(v) => void onToggleEnabled(c, v)} />
+          <Switch
+            size="small"
+            checked={enabled}
+            loading={togglingId === c.id}
+            onChange={(v) => void onToggleEnabled(c, v)}
+          />
         ) : (
           <Tag color={enabled ? 'green' : 'default'}>{enabled ? '启用' : '停用'}</Tag>
         ),
@@ -286,7 +313,7 @@ export default function ChannelsPage() {
                   title="删除渠道"
                   description="被路由规则引用的渠道无法删除。确认删除？"
                   okText="删除"
-                  okButtonProps={{ danger: true }}
+                  okButtonProps={{ danger: true, loading: deletingId === c.id }}
                   cancelText="取消"
                   onConfirm={() => void onDelete(c)}
                 >

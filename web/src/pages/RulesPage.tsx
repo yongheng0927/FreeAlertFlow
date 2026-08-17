@@ -39,6 +39,8 @@ export default function RulesPage() {
   const [sources, setSources] = useState<Source[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [loading, setLoading] = useState(false)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const [sourceFilter, setSourceFilter] = useState<number | undefined>(undefined)
 
   const [editOpen, setEditOpen] = useState(false)
@@ -132,16 +134,22 @@ export default function RulesPage() {
   }
 
   const onDelete = async (r: RoutingRule) => {
+    if (deletingId !== null) return
+    setDeletingId(r.id)
     try {
       await deleteRule(r.id)
       message.success('已删除')
       void load(sourceFilter)
     } catch (err) {
       message.error(errorMessage(err, '删除失败'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
   const onToggleEnabled = async (r: RoutingRule, enabled: boolean) => {
+    if (togglingId !== null) return
+    setTogglingId(r.id)
     try {
       await updateRule(r.id, {
         source_id: r.source_id,
@@ -155,6 +163,8 @@ export default function RulesPage() {
       void load(sourceFilter)
     } catch (err) {
       message.error(errorMessage(err, '操作失败'))
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -197,7 +207,12 @@ export default function RulesPage() {
       width: 80,
       render: (enabled: boolean, r) =>
         canWrite ? (
-          <Switch size="small" checked={enabled} onChange={(v) => void onToggleEnabled(r, v)} />
+          <Switch
+            size="small"
+            checked={enabled}
+            loading={togglingId === r.id}
+            onChange={(v) => void onToggleEnabled(r, v)}
+          />
         ) : (
           <Tag color={enabled ? 'green' : 'default'}>{enabled ? '启用' : '停用'}</Tag>
         ),
@@ -216,7 +231,7 @@ export default function RulesPage() {
                   title="删除规则"
                   description="确认删除该路由规则？"
                   okText="删除"
-                  okButtonProps={{ danger: true }}
+                  okButtonProps={{ danger: true, loading: deletingId === r.id }}
                   cancelText="取消"
                   onConfirm={() => void onDelete(r)}
                 >

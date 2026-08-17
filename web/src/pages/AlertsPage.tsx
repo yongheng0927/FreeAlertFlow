@@ -10,7 +10,9 @@ import {
   Select,
   Table,
   Tabs,
+  Tooltip,
   Typography,
+  message,
 } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -26,7 +28,6 @@ import {
   SeverityTag,
 } from '../components/tags'
 import { formatTime } from '../utils'
-import { message } from 'antd'
 
 interface FilterValues {
   status?: string
@@ -172,7 +173,18 @@ export default function AlertsPage() {
       width: 90,
       render: (s: string) => <SeverityTag severity={s} />,
     },
-    { title: '告警名称', dataIndex: 'alertname', width: 200 },
+    {
+      title: '告警名称',
+      dataIndex: 'alertname',
+      width: 200,
+      render: (v: string) => (
+        <Tooltip title={v}>
+          <Typography.Text ellipsis style={{ maxWidth: 180 }}>
+            {v}
+          </Typography.Text>
+        </Tooltip>
+      ),
+    },
     {
       title: '实例',
       width: 180,
@@ -241,7 +253,7 @@ export default function AlertsPage() {
           <DatePicker.RangePicker showTime />
         </Form.Item>
         <Form.Item>
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" loading={loading}>
             查询
           </Button>
         </Form.Item>
@@ -252,7 +264,14 @@ export default function AlertsPage() {
         loading={loading}
         columns={columns}
         dataSource={data}
-        onRow={(row) => ({ onClick: () => void openDetail(row), style: { cursor: 'pointer' } })}
+        onRow={(row) => ({
+          onClick: () => void openDetail(row),
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') void openDetail(row)
+          },
+          tabIndex: 0,
+          style: { cursor: 'pointer' },
+        })}
         pagination={{
           current: page,
           pageSize,

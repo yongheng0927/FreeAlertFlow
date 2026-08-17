@@ -33,6 +33,8 @@ export default function UsersPage() {
   const { user: me } = useAuth()
   const [data, setData] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const [roleModalUser, setRoleModalUser] = useState<User | null>(null)
   const [roleValue, setRoleValue] = useState<Role>('viewer')
@@ -108,22 +110,30 @@ export default function UsersPage() {
   }
 
   const onToggleEnabled = async (u: User, enabled: boolean) => {
+    if (togglingId !== null) return
+    setTogglingId(u.id)
     try {
       await updateUser(u.id, { enabled })
       message.success(enabled ? `已启用 ${u.username}` : `已禁用 ${u.username}`)
       void load()
     } catch (err) {
       message.error(errorMessage(err, '操作失败'), 6)
+    } finally {
+      setTogglingId(null)
     }
   }
 
   const onDelete = async (u: User) => {
+    if (deletingId !== null) return
+    setDeletingId(u.id)
     try {
       await deleteUser(u.id)
       message.success('已删除')
       void load()
     } catch (err) {
       message.error(errorMessage(err, '删除失败'), 6)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -161,6 +171,7 @@ export default function UsersPage() {
           size="small"
           checked={enabled}
           disabled={me?.id === u.id || u.is_initial}
+          loading={togglingId === u.id}
           onChange={(v) => void onToggleEnabled(u, v)}
         />
       ),
@@ -199,7 +210,7 @@ export default function UsersPage() {
             title="删除用户"
             description={`确认删除用户 ${u.username}？该操作不可恢复。`}
             okText="删除"
-            okButtonProps={{ danger: true }}
+            okButtonProps={{ danger: true, loading: deletingId === u.id }}
             cancelText="取消"
             onConfirm={() => void onDelete(u)}
           >

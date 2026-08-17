@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Layout, Menu, Dropdown, Avatar, Tag, Typography, message, theme } from 'antd'
 import {
   AlertOutlined,
@@ -53,6 +54,16 @@ export default function AppLayout() {
       .map((it) => (it as { key: string }).key)
       .find((k) => location.pathname.startsWith(k)) ?? '/dashboard'
 
+  // 按当前路由更新浏览器标签页标题
+  const selectedLabel = (
+    items.find((it) => 'key' in it && (it as { key: string }).key === selectedKey) as
+      | { label?: string }
+      | undefined
+  )?.label
+  useEffect(() => {
+    document.title = selectedLabel ? `${selectedLabel} · 烽火台` : '烽火台'
+  }, [selectedLabel])
+
   // 只有 admin 可见角色标识，其余角色不向本人展示
   const role = user && isAdmin ? ROLE_LABEL[user.role] : undefined
 
@@ -64,7 +75,7 @@ export default function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="dark" width={208}>
+      <Sider theme="dark" width={208} breakpoint="lg" collapsible>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div
             style={{

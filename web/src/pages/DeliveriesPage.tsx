@@ -73,6 +73,7 @@ export default function DeliveriesPage() {
   }, [])
 
   const onResend = async (row: Delivery) => {
+    if (resendingId !== null) return
     setResendingId(row.id)
     try {
       const r = await resendDelivery(row.id)
@@ -166,7 +167,7 @@ export default function DeliveriesPage() {
           <DatePicker.RangePicker showTime />
         </Form.Item>
         <Form.Item>
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" loading={loading}>
             查询
           </Button>
         </Form.Item>

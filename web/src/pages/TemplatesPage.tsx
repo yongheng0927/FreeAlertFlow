@@ -350,6 +350,8 @@ export default function TemplatesPage() {
   const [sortBy, setSortByState] = useState<SortBy>(loadSortBy)
   const [recentId, setRecentId] = useState<number | null>(null)
   const [editor, setEditor] = useState<EditorState | null>(null)
+  // 编辑器内容被修改后置位，返回列表前据此提示未保存
+  const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<TemplatePreview | null>(null)
@@ -397,12 +399,14 @@ export default function TemplatesPage() {
       remark: t.remark,
       content: t.content,
     })
+    setDirty(false)
     setPreview(null)
     setPreviewError('')
   }
 
   const openNew = () => {
     setEditor({ ...EMPTY_EDITOR })
+    setDirty(false)
     setPreview(null)
     setPreviewError('')
   }
@@ -416,8 +420,32 @@ export default function TemplatesPage() {
       remark: t.remark,
       content: t.content,
     })
+    setDirty(false)
     setPreview(null)
     setPreviewError('')
+  }
+
+  // 编辑器字段更新：同步置位 dirty
+  const updateEditor = (patch: Partial<EditorState>) => {
+    setEditor((e) => (e === null ? e : { ...e, ...patch }))
+    setDirty(true)
+  }
+
+  // 返回列表：有未保存修改时二次确认
+  const closeEditor = () => {
+    if (!dirty) {
+      setEditor(null)
+      return
+    }
+    Modal.confirm({
+      title: '有未保存的修改，确定要离开吗？',
+      okText: '离开',
+      cancelText: '取消',
+      onOk: () => {
+        setEditor(null)
+        setDirty(false)
+      },
+    })
   }
 
   const onDelete = async (t: Template) => {
@@ -540,7 +568,7 @@ export default function TemplatesPage() {
               type="text"
               size="small"
               icon={<ArrowLeftOutlined />}
-              onClick={() => setEditor(null)}
+              onClick={closeEditor}
             />
             <span>{editorTitle}</span>
           </Space>
@@ -587,7 +615,7 @@ export default function TemplatesPage() {
                       value={editor.name}
                       maxLength={64}
                       placeholder="如：critical-alert"
-                      onChange={(e) => setEditor({ ...editor, name: e.target.value })}
+                      onChange={(e) => updateEditor({ name: e.target.value })}
                     />
                   </Form.Item>
                 </Col>
@@ -599,7 +627,7 @@ export default function TemplatesPage() {
                         value,
                         label: m.label,
                       }))}
-                      onChange={(v) => setEditor({ ...editor, channelType: v })}
+                      onChange={(v) => updateEditor({ channelType: v })}
                     />
                   </Form.Item>
                 </Col>
@@ -609,7 +637,7 @@ export default function TemplatesPage() {
                       value={editor.remark}
                       maxLength={255}
                       placeholder="一句话说明这个模板是做什么的，会显示在卡片上"
-                      onChange={(e) => setEditor({ ...editor, remark: e.target.value })}
+                      onChange={(e) => updateEditor({ remark: e.target.value })}
                     />
                   </Form.Item>
                 </Col>
@@ -627,7 +655,7 @@ export default function TemplatesPage() {
                   placeholder={
                     '{"msg_type":"text","content":{"text":"[{{ .Status | upper }}] {{ label .CommonLabels "alertname" | jesc }}"}}'
                   }
-                  onChange={(e) => setEditor({ ...editor, content: e.target.value })}
+                  onChange={(e) => updateEditor({ content: e.target.value })}
                 />
               </Form.Item>
             </Form>
@@ -678,8 +706,13 @@ export default function TemplatesPage() {
           okText="发送"
           cancelText="关闭"
           okButtonProps={{ disabled: testChannelId === undefined, loading: testSending }}
+          cancelButtonProps={{ disabled: testSending }}
+          maskClosable={!testSending}
           onOk={() => void onTestSend()}
-          onCancel={() => setTestOpen(false)}
+          onCancel={() => {
+            if (testSending) return
+            setTestOpen(false)
+          }}
         >
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
             用当前编辑器中的模板内容渲染样例告警，真实投递到所选渠道（不会写入投递记录）。
