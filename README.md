@@ -10,7 +10,7 @@
 - 自定义消息模板：内容即渠道消息 payload 的 Go template（按渠道类型编写），支持在线预览
 - Web 管理界面：通知渠道、路由规则、告警记录、失败投递一键重发
 - 多用户 RBAC（admin / editor / viewer），支持飞书 OAuth 登录
-- 单二进制交付，支持 docker compose 一键部署
+- 前端静态资源内嵌（`go:embed`），仅支持 Docker / Helm 部署：docker compose 一键起本地环境，Helm chart 部署到 K8s
 
 ## 快速开始
 

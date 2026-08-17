@@ -61,7 +61,7 @@ Prometheus 生态中，Alertmanager 是事实标准的告警路由/通知组件�
 | 前端 | React 18 + TypeScript + Vite，Ant Design（建议） |
 | 数据库 | PostgreSQL 18（最低兼容 16） |
 | 认证 | JWT（access + refresh token），OAuth2 第三方登录 |
-| 部署 | 单二进制 + 前端静态资源内嵌（建议 `go:embed`），Docker 镜像 |
+| 部署 | 仅 Docker / Helm：Docker 镜像（前端静态资源经 `go:embed` 内嵌），Helm chart 部署 K8s；不提供裸二进制部署方式 |
 
 ---
 
@@ -257,8 +257,10 @@ FENGHUO_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 
 **NFR-4 可部署性**
 
+- 仅支持两种部署方式：Docker 镜像（含 docker compose）与 Helm chart（K8s）；不发布、不文档化裸二进制部署（本地开发 `go run` 不受限）。
 - 提供 Dockerfile（多阶段构建，前端产物内嵌）。
 - 提供 docker-compose.yml（app + PostgreSQL 18）一键起 demo。
+- 提供 Helm chart（`deploy/helm`）：可配置镜像、数据库连接、Ingress、资源限制。
 - 数据库迁移自动执行（gormigrate 或 golang-migrate）。
 
 **NFR-5 兼容性**
