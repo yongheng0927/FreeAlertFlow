@@ -203,7 +203,23 @@
 
 ---
 
-## 12. ER 关系一览
+## 12. login_attempts — 登录限流（迁移 0008）
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| ip | TEXT | PK | 客户端 IP，每行一个 IP |
+| fails | INT | NOT NULL DEFAULT 0 | 当前固定窗口内的失败计数 |
+| window_start | TIMESTAMPTZ | NOT NULL | 固定窗口起点，`now - window_start >= window` 时窗口重置 |
+| locked_until | TIMESTAMPTZ | NOT NULL DEFAULT '-infinity' | 锁定截止时间，`'-infinity'` 表示从未锁定 |
+
+说明：
+- 登录限流（NFR-1）从内存迁至数据库——多副本部署时内存计数会把防爆破阈值放大 N 倍且锁定状态不共享
+- 语义为固定窗口（原内存版是滑动窗口，迁库后的常规取舍）：窗口内失败达上限则 `locked_until = now + lockTime` 并清零计数；同一 IP 的读改写由事务内 `SELECT ... FOR UPDATE` 行锁串行化，不同 IP 互不阻塞
+- 过期行不删（体积按 distinct IP 增长，可接受），登录成功时删除对应行
+
+---
+
+## 13. ER 关系一览
 
 ```
 users 1──────* oauth_identities
@@ -213,7 +229,7 @@ sources 1──────* routing_rules *──────1 channels *──
 sources 1──────* alerts 1──────* deliveries *──────1 channels
 ```
 
-## 13. 设计取舍备忘
+## 14. 设计取舍备忘
 
 | 决策 | 取舍 |
 |---|---|

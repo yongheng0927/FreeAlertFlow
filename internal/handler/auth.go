@@ -3,6 +3,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,10 +32,16 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// Login 处理 POST /api/auth/login，带按 IP 的登录限流（NFR-1）
+// Login 处理 POST /api/auth/login，带按 IP 的登录限流（NFR-1）。
+// 限流器自身出错时 fail-open：记日志并放行，不因限流存储故障把正常
+// 用户锁在门外
 func (h *AuthHandler) Login(c *gin.Context) {
+	ctx := c.Request.Context()
 	ip := c.ClientIP()
-	if h.limiter.Locked(ip) {
+	locked, err := h.limiter.Locked(ctx, ip)
+	if err != nil {
+		slog.Error("login limiter check failed, allowing request", "ip", ip, "error", err)
+	} else if locked {
 		fail(c, http.StatusTooManyRequests, "too many failed login attempts, please try again later")
 		return
 	}
@@ -43,11 +50,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "username and password are required")
 		return
 	}
-	_, pair, err := h.auth.Login(c.Request.Context(), req.Username, req.Password)
+	_, pair, err := h.auth.Login(ctx, req.Username, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCredentials):
-			h.limiter.Fail(ip)
+			if err := h.limiter.Fail(ctx, ip); err != nil {
+				slog.Error("login limiter fail count failed", "ip", ip, "error", err)
+			}
 			fail(c, http.StatusUnauthorized, err.Error())
 		case errors.Is(err, service.ErrAccountDisabled):
 			fail(c, http.StatusForbidden, err.Error())
@@ -56,7 +65,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 		return
 	}
-	h.limiter.Reset(ip)
+	if err := h.limiter.Reset(ctx, ip); err != nil {
+		slog.Error("login limiter reset failed", "ip", ip, "error", err)
+	}
 	c.JSON(http.StatusOK, tokenPairResponse(pair))
 }
 

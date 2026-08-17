@@ -362,62 +362,146 @@ func TestBootstrapAdminNoOpWithoutCredentials(t *testing.T) {
 	}
 }
 
-// --- 登录限流器 ---
+// --- 登录限流器（固定窗口语义，状态存 DB，测试用内存 fake store）---
+
+// fakeLoginAttemptStore 是 LoginAttemptStore 的内存实现，串行化语义与
+// GORM 实现的行锁一致（map 读写不并发即等价）
+type fakeLoginAttemptStore struct {
+	rows map[string]loginAttempt
+}
+
+func newFakeLoginAttemptStore() *fakeLoginAttemptStore {
+	return &fakeLoginAttemptStore{rows: map[string]loginAttempt{}}
+}
+
+func (f *fakeLoginAttemptStore) Read(_ context.Context, ip string) (loginAttempt, error) {
+	return f.rows[ip], nil
+}
+
+func (f *fakeLoginAttemptStore) Update(_ context.Context, ip string, _ time.Time, fn func(loginAttempt) loginAttempt) error {
+	f.rows[ip] = fn(f.rows[ip])
+	return nil
+}
+
+func (f *fakeLoginAttemptStore) Reset(_ context.Context, ip string) error {
+	delete(f.rows, ip)
+	return nil
+}
+
+func newTestLimiter(now *time.Time) *LoginLimiter {
+	l := NewLoginLimiter(newFakeLoginAttemptStore(), 5, time.Minute, 10*time.Minute)
+	l.now = func() time.Time { return *now }
+	return l
+}
+
+func mustFail(t *testing.T, l *LoginLimiter, ip string) {
+	t.Helper()
+	if err := l.Fail(context.Background(), ip); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+}
+
+func lockedNow(t *testing.T, l *LoginLimiter, ip string) bool {
+	t.Helper()
+	locked, err := l.Locked(context.Background(), ip)
+	if err != nil {
+		t.Fatalf("Locked: %v", err)
+	}
+	return locked
+}
 
 func TestLoginLimiterLocksAfterMaxFailures(t *testing.T) {
-	l := NewLoginLimiter(5, time.Minute, 10*time.Minute)
 	now := time.Now()
-	l.now = func() time.Time { return now }
+	l := newTestLimiter(&now)
 
+	// 窗口内累计：前 4 次不锁定
 	for i := 0; i < 4; i++ {
-		l.Fail("1.2.3.4")
-		if l.Locked("1.2.3.4") {
+		mustFail(t, l, "1.2.3.4")
+		if lockedNow(t, l, "1.2.3.4") {
 			t.Fatalf("locked after %d failures, want lock at 5", i+1)
 		}
 	}
-	l.Fail("1.2.3.4")
-	if !l.Locked("1.2.3.4") {
+	// 达上限锁定
+	mustFail(t, l, "1.2.3.4")
+	if !lockedNow(t, l, "1.2.3.4") {
 		t.Fatal("must be locked after 5 failures")
 	}
 
 	// 其他 IP 不受影响
-	if l.Locked("5.6.7.8") {
+	if lockedNow(t, l, "5.6.7.8") {
 		t.Fatal("unrelated IP must not be locked")
 	}
 
-	// 锁定在 lockTime 后过期
-	now = now.Add(10*time.Minute + time.Second)
-	if l.Locked("1.2.3.4") {
-		t.Fatal("lock must expire after lockTime")
+	// 锁定期间继续失败不延长锁定（锁定到期即恢复）
+	now = now.Add(5 * time.Minute)
+	mustFail(t, l, "1.2.3.4")
+	now = now.Add(5*time.Minute + time.Second)
+	if lockedNow(t, l, "1.2.3.4") {
+		t.Fatal("lock must expire after lockTime, failures during lock must not extend it")
 	}
 }
 
-func TestLoginLimiterWindowSlides(t *testing.T) {
-	l := NewLoginLimiter(5, time.Minute, 10*time.Minute)
+func TestLoginLimiterWindowResets(t *testing.T) {
 	now := time.Now()
-	l.now = func() time.Time { return now }
+	l := newTestLimiter(&now)
 
 	for i := 0; i < 4; i++ {
-		l.Fail("1.2.3.4")
+		mustFail(t, l, "1.2.3.4")
 	}
-	// 移出窗口：过期的失败记录不再计数
+	// 固定窗口过期：从下一次失败起重新开窗计数
 	now = now.Add(2 * time.Minute)
-	l.Fail("1.2.3.4")
-	if l.Locked("1.2.3.4") {
-		t.Fatal("failures older than the window must not count")
+	mustFail(t, l, "1.2.3.4")
+	if lockedNow(t, l, "1.2.3.4") {
+		t.Fatal("failures from the expired window must not count")
+	}
+	// 新窗口内再累计 4 次（共 5 次）才锁定
+	for i := 0; i < 3; i++ {
+		mustFail(t, l, "1.2.3.4")
+		if lockedNow(t, l, "1.2.3.4") {
+			t.Fatalf("locked after %d failures in the new window, want lock at 5", i+2)
+		}
+	}
+	mustFail(t, l, "1.2.3.4")
+	if !lockedNow(t, l, "1.2.3.4") {
+		t.Fatal("must be locked after 5 failures in the new window")
 	}
 }
 
 func TestLoginLimiterReset(t *testing.T) {
-	l := NewLoginLimiter(5, time.Minute, 10*time.Minute)
+	now := time.Now()
+	l := newTestLimiter(&now)
+
 	for i := 0; i < 5; i++ {
-		l.Fail("1.2.3.4")
+		mustFail(t, l, "1.2.3.4")
 	}
-	if !l.Locked("1.2.3.4") {
+	if !lockedNow(t, l, "1.2.3.4") {
 		t.Fatal("must be locked")
 	}
-	l.Reset("1.2.3.4")
-	if l.Locked("1.2.3.4") {
+	if err := l.Reset(context.Background(), "1.2.3.4"); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+	if lockedNow(t, l, "1.2.3.4") {
 		t.Fatal("reset must clear the lock")
+	}
+	// 清除后重新计数：单次失败不会立即锁定
+	mustFail(t, l, "1.2.3.4")
+	if lockedNow(t, l, "1.2.3.4") {
+		t.Fatal("must count from zero after reset")
+	}
+}
+
+// 纯函数 applyFailure 的补充语义：锁定期间的失败不改变状态
+func TestApplyFailureSkipsWhileLocked(t *testing.T) {
+	now := time.Now()
+	lockedState := applyFailure(loginAttempt{}, now, 5, time.Minute, 10*time.Minute)
+	for i := 0; i < 4; i++ {
+		lockedState = applyFailure(lockedState, now, 5, time.Minute, 10*time.Minute)
+	}
+	if !lockedState.locked(now) {
+		t.Fatal("must be locked after 5 failures")
+	}
+	// 锁定中再来一次失败：状态原样返回
+	if got := applyFailure(lockedState, now.Add(time.Minute), 5, time.Minute, 10*time.Minute); got != lockedState {
+		t.Fatalf("failure during lock must not change state, got %+v", got)
 	}
 }

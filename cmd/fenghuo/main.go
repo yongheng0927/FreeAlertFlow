@@ -133,8 +133,9 @@ func run() error {
 		slog.Info("initial admin user created", "username", cfg.Admin.User)
 	}
 
-	// NFR-1：每分钟 5 次登录失败后，锁定该 IP 10 分钟
-	limiter := service.NewLoginLimiter(5, time.Minute, 10*time.Minute)
+	// NFR-1：固定窗口 1 分钟内 5 次登录失败后，锁定该 IP 10 分钟；
+	// 状态存于 login_attempts 表，多副本共享计数与锁定
+	limiter := service.NewLoginLimiter(service.NewGormLoginAttemptStore(db), 5, time.Minute, 10*time.Minute)
 
 	router := handler.NewRouter(&handler.Deps{
 		Config:        cfg,
