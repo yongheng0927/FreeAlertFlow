@@ -182,7 +182,28 @@
 
 ---
 
-## 10. ER 关系一览
+## 10. oauth_states — OAuth 登录 state（迁移 0006）
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| state | TEXT | PK | 随机 state，回调时一次性消费 |
+| expires_at | TIMESTAMPTZ | NOT NULL, INDEX | 过期时间，后台任务定期清理 |
+
+说明：CSRF state 从内存迁至数据库——多副本部署时签发与回调可能落在不同实例，内存态会导致登录间歇性失败
+
+## 11. app_settings — 通用键值设置（迁移 0007）
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| key | TEXT | PK | 设置键，如 `jwt_secret` |
+| value | TEXT | NOT NULL | 设置值 |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+
+说明：首个用途是持久化启动时随机生成的 JWT 密钥（未显式配置 `FENGHUO_JWT_SECRET` 时），避免重启/多副本下各实例密钥不一致导致 token 失效
+
+---
+
+## 12. ER 关系一览
 
 ```
 users 1──────* oauth_identities
@@ -192,7 +213,7 @@ sources 1──────* routing_rules *──────1 channels *──
 sources 1──────* alerts 1──────* deliveries *──────1 channels
 ```
 
-## 11. 设计取舍备忘
+## 13. 设计取舍备忘
 
 | 决策 | 取舍 |
 |---|---|

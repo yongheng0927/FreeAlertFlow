@@ -5,6 +5,7 @@
 # Go build outputs
 /fenghuo
 *.exe
+*.exe~
 *.test
 *.out
 
