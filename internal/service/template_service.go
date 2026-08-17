@@ -195,7 +195,7 @@ func (s *TemplateService) Preview(ctx context.Context, content, channelType stri
 }
 
 // TestSend 把模板渲染结果真实投递到指定渠道（对标 FR-2.5 的渠道测试）：
-// 渲染逻辑与 Preview 完全一致，发送复用渠道自己的加密凭证 有意不写
+// 渲染逻辑与 Preview 完全一致，发送复用渠道自己的凭证 有意不写
 // deliveries 记录：测试发送没有关联告警
 func (s *TemplateService) TestSend(ctx context.Context, content, channelType string,
 	alertJSON []byte, channelID int64) (*TestSendResult, error) {

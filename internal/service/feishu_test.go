@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
-	fafcrypto "github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // TestSignKnownAnswer 用一个独立的 openssl 计算向量验证 FR-2.2 的签名算法：
@@ -53,26 +52,7 @@ func TestRetryableClassification(t *testing.T) {
 	}
 }
 
-func testCipher(t *testing.T) *fafcrypto.Cipher {
-	t.Helper()
-	c, err := fafcrypto.New([]byte("0123456789abcdef0123456789abcdef"))
-	if err != nil {
-		t.Fatalf("crypto.New: %v", err)
-	}
-	return c
-}
-
-func encrypt(t *testing.T, c *fafcrypto.Cipher, s string) []byte {
-	t.Helper()
-	b, err := c.Encrypt([]byte(s))
-	if err != nil {
-		t.Fatalf("Encrypt: %v", err)
-	}
-	return b
-}
-
 func TestFeishuSendSuccessWithSign(t *testing.T) {
-	cipher := testCipher(t)
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -82,12 +62,8 @@ func TestFeishuSendSuccessWithSign(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	secret := encrypt(t, cipher, "my-secret")
-	ch := &model.Channel{
-		WebhookURLEncrypted: encrypt(t, cipher, srv.URL),
-		SecretEncrypted:     &secret,
-	}
-	sender := NewFeishuSender(cipher, 5*time.Second)
+	ch := &model.Channel{WebhookURL: srv.URL, Secret: "my-secret"}
+	sender := NewFeishuSender(5 * time.Second)
 	res := sender.Send(context.Background(), ch, []byte(`{"msg_type":"text","content":{"text":"hi"}}`))
 	if !res.Success() {
 		t.Fatalf("result = %+v, want success", res)
@@ -114,13 +90,12 @@ func TestFeishuSendSuccessWithSign(t *testing.T) {
 }
 
 func TestFeishuSendLegacyResponse(t *testing.T) {
-	cipher := testCipher(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"Extra":null,"StatusCode":0,"StatusMessage":"success"}`))
 	}))
 	defer srv.Close()
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL)}
-	res := NewFeishuSender(cipher, 5*time.Second).
+	ch := &model.Channel{WebhookURL: srv.URL}
+	res := NewFeishuSender(5 * time.Second).
 		Send(context.Background(), ch, []byte(`{"msg_type":"text","content":{"text":"hi"}}`))
 	if !res.Success() {
 		t.Fatalf("legacy response must parse as success: %+v", res)
@@ -128,13 +103,12 @@ func TestFeishuSendLegacyResponse(t *testing.T) {
 }
 
 func TestFeishuSendBusinessError(t *testing.T) {
-	cipher := testCipher(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"code":19021,"msg":"sign match fail or timestamp is not within one hour from current time"}`))
 	}))
 	defer srv.Close()
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL)}
-	res := NewFeishuSender(cipher, 5*time.Second).
+	ch := &model.Channel{WebhookURL: srv.URL}
+	res := NewFeishuSender(5 * time.Second).
 		Send(context.Background(), ch, []byte(`{"msg_type":"text","content":{"text":"hi"}}`))
 	if res.Success() {
 		t.Fatal("business error must not be success")
@@ -152,30 +126,16 @@ func TestFeishuSendBusinessError(t *testing.T) {
 }
 
 func TestFeishuSendNetworkError(t *testing.T) {
-	cipher := testCipher(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	url := srv.URL
 	srv.Close() // 强制连接被拒
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, url)}
-	res := NewFeishuSender(cipher, time.Second).
+	ch := &model.Channel{WebhookURL: url}
+	res := NewFeishuSender(time.Second).
 		Send(context.Background(), ch, []byte(`{}`))
 	if res.Err == nil {
 		t.Fatal("expected transport error")
 	}
 	if !res.Retryable() {
 		t.Fatal("transport error must be retryable")
-	}
-}
-
-func TestFeishuSendDecryptErrorNotRetryable(t *testing.T) {
-	cipher := testCipher(t)
-	ch := &model.Channel{WebhookURLEncrypted: []byte("garbage")}
-	res := NewFeishuSender(cipher, time.Second).
-		Send(context.Background(), ch, []byte(`{}`))
-	if res.Success() || res.Retryable() {
-		t.Fatalf("decrypt error must be a non-retryable local failure: %+v", res)
-	}
-	if res.Code != -1 {
-		t.Fatalf("code = %d, want -1 for local errors", res.Code)
 	}
 }

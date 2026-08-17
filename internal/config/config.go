@@ -19,14 +19,12 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
-	// SecretKey 是用于敏感字段加密的 AES-256-GCM 密钥（必须恰好 32 字节）
-	SecretKey string
-	JWT       JWTConfig
-	Admin     AdminConfig
-	Log       LogConfig
-	Alert     AlertConfig
-	Channel   ChannelConfig
-	OAuth     OAuthConfig
+	JWT      JWTConfig
+	Admin    AdminConfig
+	Log      LogConfig
+	Alert    AlertConfig
+	Channel  ChannelConfig
+	OAuth    OAuthConfig
 
 	// JWTSecretGenerated 为 true 表示 jwt.secret 为空，启动时生成了随机
 	// 密钥（会被持久化到 app_settings，重启不失效；多副本共享）
@@ -137,7 +135,6 @@ func Load() (*Config, error) {
 			DBName:   v.GetString("database.dbname"),
 			SSLMode:  v.GetString("database.sslmode"),
 		},
-		SecretKey: v.GetString("secret_key"),
 		JWT: JWTConfig{
 			Secret:     v.GetString("jwt.secret"),
 			AccessTTL:  v.GetDuration("jwt.access_ttl"),
@@ -165,12 +162,6 @@ func Load() (*Config, error) {
 		},
 	}
 
-	if cfg.SecretKey == "" {
-		return nil, errors.New("FENGHUO_SECRET_KEY is required (32 bytes, used to encrypt sensitive fields)")
-	}
-	if n := len([]byte(cfg.SecretKey)); n != 32 {
-		return nil, fmt.Errorf("FENGHUO_SECRET_KEY must be exactly 32 bytes, got %d", n)
-	}
 	if cfg.Database.User == "" || cfg.Database.DBName == "" {
 		return nil, errors.New("database config incomplete: FENGHUO_DATABASE_USER and FENGHUO_DATABASE_DBNAME are required")
 	}

@@ -94,8 +94,8 @@
 | id | BIGINT | PK | |
 | name | VARCHAR(128) | NOT NULL, UNIQUE | 渠道名 |
 | type | VARCHAR(16) | NOT NULL DEFAULT 'feishu' | `feishu` / `dingtalk` / `wecom` |
-| webhook_url_encrypted | BYTEA | NOT NULL | 机器人 webhook 完整地址，AES-GCM 加密存储（URL 内含机器人 token，泄露=任何人可向群内发消息，与 secret 同等敏感） |
-| secret_encrypted | BYTEA | NULL | 加签密钥，AES-GCM 加密存储；NULL=未开启签名校验（wecom 无加签机制，恒为 NULL） |
+| webhook_url | TEXT | NOT NULL DEFAULT '' | 机器人 webhook 完整地址，明文存储（URL 内含机器人 token，泄露=任何人可向群内发消息，属敏感凭证；接口返回脱敏） |
+| secret | TEXT | NOT NULL DEFAULT '' | 加签密钥，明文存储；空串=未开启签名校验（wecom 无加签机制，恒为空） |
 | keyword | VARCHAR(64) | NOT NULL DEFAULT '' | 机器人关键词安全设置（发送内容必须包含） |
 | template_id | BIGINT | NULL, INDEX | 绑定模板；NULL=内置默认模板 |
 | at_all | BOOLEAN | NOT NULL DEFAULT FALSE | 是否 @所有人（飞书/钉钉生效；企微 markdown 不支持 @，忽略） |
@@ -103,8 +103,7 @@
 | enabled | BOOLEAN | NOT NULL DEFAULT TRUE | |
 
 说明：
-- 加密列用 `BYTEA`：AES-GCM 输出是二进制（nonce+ciphertext），存二进制避免 base64 转换歧义
-- webhook_url 与 secret 都是「可逆但必须保密」的凭证（secret 需还原用于签名，URL 需还原用于发请求），敏感度同级，统一加密存储；接口返回脱敏（仅显示域名 + hook ID 尾 4 位），编辑时不重新提交则保持原值
+- webhook_url 与 secret 都是「可逆但必须保密」的凭证（secret 需还原用于签名，URL 需还原用于发请求），明文存储（取舍见「设计取舍备忘」）；接口返回脱敏（仅显示域名 + hook ID 尾 4 位），编辑时不重新提交则保持原值
 - 消息形态（飞书互动卡片 / 钉钉与企微 markdown）不放渠道上——由所绑定的模板内容决定（模板按渠道类型编写完整消息 payload）
 - **扩展性验证（新平台）**：type/webhook_url/secret/keyword/at_all 五列对飞书、钉钉、企业微信通用（飞书/钉钉有加签+关键词，企业微信仅 key）；平台特有配置（@指定人列表等）进 `extra` JSONB，不改表结构
 
@@ -237,10 +236,10 @@ sources 1──────* alerts 1──────* deliveries *───�
 | 全部硬删除 | 管理类表删除前应用层校验引用（模板被渠道引用则拒绝删除）；流水表按保留期物理清理；不做软删除 |
 | JSONB 字段大量使用 | labels/annotations/match_labels/extra 本就是半结构数据；JSONB 提供 `@>` 包含查询、GIN 索引、路径提取，远比 MySQL JSON 可用。高频过滤字段（severity/alertname）仍冗余为列走 btree，DB 能力不作为偷懒的理由 |
 | 不用 ENUM | PG 虽有原生 ENUM，但 `ALTER TYPE ADD VALUE` 有事务限制；role/type/status/disposition 全部 VARCHAR，加值零 DDL，合法值由应用层校验 |
-| PG 原生类型优先 | `BOOLEAN`（不用 TINYINT 模拟）、`TIMESTAMPTZ`（带时区，跨时区部署无歧义）、`GENERATED ALWAYS AS IDENTITY`（标准 SQL 自增，优于 SERIAL）、`BYTEA`（加密列）——GORM 映射全部直接支持 |
+| PG 原生类型优先 | `BOOLEAN`（不用 TINYINT 模拟）、`TIMESTAMPTZ`（带时区，跨时区部署无歧义）、`GENERATED ALWAYS AS IDENTITY`（标准 SQL 自增，优于 SERIAL）——GORM 映射全部直接支持 |
 | channel 删模板绑定不级联 | templates 删除时校验是否被渠道引用，被引用则拒绝删除 |
 | channels.extra 预留 | 平台特有配置的统一出口，V2 企业微信 / V3 钉钉接入时大概率零 DDL |
-| webhook_url 也加密存储 | URL 内含机器人 token，与 secret 同为「可逆但保密」的凭证；AES-GCM 设施已存在，统一加密边际成本为零，DB 泄露时攻击面更小；接口层统一脱敏返回 |
+| 渠道凭证明文存储 | webhook_url/secret 是「可逆但需保密」的凭证，曾用 AES-GCM 加密存储；但密钥与密文同库同机部署时加密收益有限，且引入密钥管理成本（轮换即全量数据失效），故改明文存储、移除 secret_key 设施；防护边界收敛为接口层脱敏返回（仅显示尾 4 位）与数据库访问控制 |
 | alerts.content_hash | 去重判定（FR-1.3）落库为显式列：比对 64 字符定长字符串，免于反序列化比对完整 JSON，也让去重逻辑可测试、可审计 |
 | deliveries.attempts / trigger_type | 两类重试语义分开承载：有限重试（FR-2.4）不新增行、只累加 `attempts`；手动重发（FR-2.6）新增 `trigger_type='manual'` 的行，原失败记录保持不动，排查痕迹完整 |
 | alerts.disposition | 「为什么没发出去」的最高频答案（去重 / 无路由 / 已分发）冗余成一列，列表页免 join 可查；deliveries 仍保留逐渠道明细 |

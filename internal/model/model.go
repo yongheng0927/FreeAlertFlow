@@ -99,18 +99,18 @@ func (Template) TableName() string { return "templates" }
 
 // Channel 是通知渠道，例如飞书机器人（channels 表）
 type Channel struct {
-	ID                  int64            `gorm:"primaryKey;autoIncrement"`
-	Name                string           `gorm:"column:name"`
-	Type                string           `gorm:"column:type"`                  // feishu / dingtalk / wecom
-	WebhookURLEncrypted []byte           `gorm:"column:webhook_url_encrypted"` // AES-GCM 密文
-	SecretEncrypted     *[]byte          `gorm:"column:secret_encrypted"`      // NULL = 不启用签名校验
-	Keyword             string           `gorm:"column:keyword"`
-	TemplateID          *int64           `gorm:"column:template_id"`
-	AtAll               bool             `gorm:"column:at_all"`
-	Extra               *json.RawMessage `gorm:"column:extra;type:jsonb"`
-	Enabled             bool             `gorm:"column:enabled"`
-	CreatedAt           time.Time        `gorm:"column:created_at"`
-	UpdatedAt           time.Time        `gorm:"column:updated_at"`
+	ID         int64            `gorm:"primaryKey;autoIncrement"`
+	Name       string           `gorm:"column:name"`
+	Type       string           `gorm:"column:type"`        // feishu / dingtalk / wecom
+	WebhookURL string           `gorm:"column:webhook_url"` // 明文存储
+	Secret     string           `gorm:"column:secret"`      // 明文存储；空 = 不启用签名校验
+	Keyword    string           `gorm:"column:keyword"`
+	TemplateID *int64           `gorm:"column:template_id"`
+	AtAll      bool             `gorm:"column:at_all"`
+	Extra      *json.RawMessage `gorm:"column:extra;type:jsonb"`
+	Enabled    bool             `gorm:"column:enabled"`
+	CreatedAt  time.Time        `gorm:"column:created_at"`
+	UpdatedAt  time.Time        `gorm:"column:updated_at"`
 }
 
 func (Channel) TableName() string { return "channels" }

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
-	"github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // MaskCredential 对凭证脱敏用于 API 返回：只显示最后 4 个字符
@@ -29,20 +28,19 @@ func MaskCredential(s string) string {
 	return "****" + tail
 }
 
-// ChannelService 实现渠道管理：凭证加密、脱敏读取、带引用检查的删除和
+// ChannelService 实现渠道管理：凭证明文存储、脱敏读取、带引用检查的删除和
 // 测试发送（FR-2.1/2.5）
 type ChannelService struct {
 	channels  ChannelStore
 	rules     RuleStore
 	templates TemplateStore
-	cipher    *crypto.Cipher
 	sender    Sender
 }
 
 // NewChannelService 创建 ChannelService
 func NewChannelService(channels ChannelStore, rules RuleStore, templates TemplateStore,
-	cipher *crypto.Cipher, sender Sender) *ChannelService {
-	return &ChannelService{channels: channels, rules: rules, templates: templates, cipher: cipher, sender: sender}
+	sender Sender) *ChannelService {
+	return &ChannelService{channels: channels, rules: rules, templates: templates, sender: sender}
 }
 
 // ChannelInput 承载渠道的创建/更新字段
@@ -95,7 +93,7 @@ func validateWebhookURL(raw, chType string) error {
 	return nil
 }
 
-// Create 创建渠道，加密存储 webhook URL 和签名密钥（FR-2.2）
+// Create 创建渠道，明文存储 webhook URL 和签名密钥（FR-2.2）
 func (s *ChannelService) Create(ctx context.Context, in ChannelInput, secret string) (*model.Channel, error) {
 	if in.Name == "" {
 		return nil, validationErr("name is required")
@@ -123,26 +121,18 @@ func (s *ChannelService) Create(ctx context.Context, in ChannelInput, secret str
 	if err := s.checkTemplate(ctx, chType, in.TemplateID); err != nil {
 		return nil, err
 	}
-	encURL, err := s.cipher.Encrypt([]byte(in.WebhookURL))
-	if err != nil {
-		return nil, err
-	}
 	ch := &model.Channel{
-		Name:                in.Name,
-		Type:                chType,
-		WebhookURLEncrypted: encURL,
-		Keyword:             in.Keyword,
-		TemplateID:          in.TemplateID,
-		AtAll:               in.AtAll,
-		Enabled:             in.Enabled,
+		Name:       in.Name,
+		Type:       chType,
+		WebhookURL: in.WebhookURL,
+		Keyword:    in.Keyword,
+		TemplateID: in.TemplateID,
+		AtAll:      in.AtAll,
+		Enabled:    in.Enabled,
 	}
 	// 企业微信机器人无加签机制，secret 仅对 feishu/dingtalk 有效
 	if secret != "" && chType != model.ChannelTypeWeCom {
-		enc, err := s.cipher.Encrypt([]byte(secret))
-		if err != nil {
-			return nil, err
-		}
-		ch.SecretEncrypted = &enc
+		ch.Secret = secret
 	}
 	if err := s.channels.Create(ctx, ch); err != nil {
 		return nil, err
@@ -179,22 +169,10 @@ func (s *ChannelService) Update(ctx context.Context, id int64, p ChannelPatch) (
 		if err := validateWebhookURL(*p.WebhookURL, ch.Type); err != nil {
 			return nil, err
 		}
-		enc, err := s.cipher.Encrypt([]byte(*p.WebhookURL))
-		if err != nil {
-			return nil, err
-		}
-		ch.WebhookURLEncrypted = enc
+		ch.WebhookURL = *p.WebhookURL
 	}
 	if p.Secret != nil && ch.Type != model.ChannelTypeWeCom { // 企微无加签，忽略
-		if *p.Secret == "" {
-			ch.SecretEncrypted = nil // 显式清除
-		} else {
-			enc, err := s.cipher.Encrypt([]byte(*p.Secret))
-			if err != nil {
-				return nil, err
-			}
-			ch.SecretEncrypted = &enc
-		}
+		ch.Secret = *p.Secret // 空串即显式清除
 	}
 	if p.Keyword != nil {
 		ch.Keyword = *p.Keyword
@@ -345,18 +323,10 @@ func (s *ChannelService) View(ch *model.Channel) (*ChannelView, error) {
 		TemplateID: ch.TemplateID, AtAll: ch.AtAll, Enabled: ch.Enabled,
 		CreatedAt: ch.CreatedAt, UpdatedAt: ch.UpdatedAt,
 	}
-	url, err := s.cipher.Decrypt(ch.WebhookURLEncrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt webhook url of channel %d: %w", ch.ID, err)
-	}
-	v.WebhookURL = MaskCredential(string(url))
-	if ch.SecretEncrypted != nil && len(*ch.SecretEncrypted) > 0 {
-		secret, err := s.cipher.Decrypt(*ch.SecretEncrypted)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt secret of channel %d: %w", ch.ID, err)
-		}
+	v.WebhookURL = MaskCredential(ch.WebhookURL)
+	if ch.Secret != "" {
 		v.HasSecret = true
-		v.Secret = MaskCredential(string(secret))
+		v.Secret = MaskCredential(ch.Secret)
 	}
 	return v, nil
 }

@@ -109,7 +109,7 @@ POST /api/v1/alerts/webhook/:token
   - `sign = Base64(HMAC-SHA256(key = stringToSign, data = ""))`（即以 `timestamp + "\n" + secret` 为 HMAC 密钥、空串为消息体）
 - 请求体携带 `timestamp` 与 `sign` 字段。
 - 钉钉加签按其官方算法：`sign = Base64(HMAC-SHA256(key = secret, data = timestamp(毫秒) + "\n" + secret))`，URL 编码后拼到 webhook URL 的 `timestamp`/`sign` 参数。
-- 签名密钥与 Webhook URL 在数据库中**均加密存储**（AES-GCM，密钥由环境变量 `FENGHUO_SECRET_KEY` 提供）：Webhook URL 内含机器人 token，泄露即等于任何人可向群内发消息，敏感度与 Secret 同级，故同等对待。接口返回值均脱敏（仅显示尾部 4 位）。
+- 签名密钥与 Webhook URL 在数据库中**明文存储**：Webhook URL 内含机器人 token，泄露即等于任何人可向群内发消息，敏感度与 Secret 同级；接口返回值均脱敏（仅显示尾部 4 位），不明文返回前端。
 
 - [x] **FR-2.3 消息模板封装（V1 核心亮点）**：
 
@@ -218,7 +218,6 @@ FENGHUO_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 | `FENGHUO_DATABASE_HOST` / `FENGHUO_DATABASE_PORT` | `localhost` / `5432` | PostgreSQL 地址 |
 | `FENGHUO_DATABASE_USER` / `FENGHUO_DATABASE_PASSWORD` / `FENGHUO_DATABASE_DBNAME` | — | PostgreSQL 账号、密码、库名（user/dbname 必填） |
 | `FENGHUO_DATABASE_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
-| `FENGHUO_SECRET_KEY` | — | 敏感字段加密密钥（32 字节，必填，否则启动失败） |
 | `FENGHUO_JWT_SECRET` | 随机生成（启动警告） | JWT 签名密钥 |
 | `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD` | — | 初始管理员 |
 | `FENGHUO_OAUTH_*` | — | OAuth2 配置，见 4.5 |

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
-	"github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // 企业微信群机器人业务错误码（官方文档中的 webhook 错误码，精简收录）
@@ -19,23 +18,17 @@ const (
 // @人，ch.AtAll 无从表达，直接忽略
 type WeComSender struct {
 	client *http.Client
-	cipher *crypto.Cipher
 }
 
 // NewWeComSender 创建带指定请求超时的 WeComSender
-func NewWeComSender(cipher *crypto.Cipher, timeout time.Duration) *WeComSender {
+func NewWeComSender(timeout time.Duration) *WeComSender {
 	return &WeComSender{
 		client: &http.Client{Timeout: timeout},
-		cipher: cipher,
 	}
 }
 
 func (s *WeComSender) Send(ctx context.Context, ch *model.Channel, payload []byte) SendResult {
-	webhookURL, err := s.cipher.Decrypt(ch.WebhookURLEncrypted)
-	if err != nil {
-		return localResult("decrypt webhook url: %v", err)
-	}
-	respBody, httpStatus, err := postJSON(ctx, s.client, string(webhookURL), payload)
+	respBody, httpStatus, err := postJSON(ctx, s.client, ch.WebhookURL, payload)
 	if err != nil {
 		return SendResult{Err: err, HTTPStatus: httpStatus}
 	}

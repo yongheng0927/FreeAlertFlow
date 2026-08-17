@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
-	"github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // 钉钉自定义机器人业务错误码（官方文档中的 webhook 错误码，精简收录）
@@ -25,14 +24,12 @@ const (
 // DingTalkSender 把消息 POST 到钉钉自定义机器人 webhook（FR-2.2 扩展渠道）
 type DingTalkSender struct {
 	client *http.Client
-	cipher *crypto.Cipher
 }
 
 // NewDingTalkSender 创建带指定请求超时的 DingTalkSender
-func NewDingTalkSender(cipher *crypto.Cipher, timeout time.Duration) *DingTalkSender {
+func NewDingTalkSender(timeout time.Duration) *DingTalkSender {
 	return &DingTalkSender{
 		client: &http.Client{Timeout: timeout},
-		cipher: cipher,
 	}
 }
 
@@ -46,20 +43,11 @@ func DingTalkSign(secret string, timestamp int64) string {
 }
 
 func (s *DingTalkSender) Send(ctx context.Context, ch *model.Channel, payload []byte) SendResult {
-	webhookURL, err := s.cipher.Decrypt(ch.WebhookURLEncrypted)
-	if err != nil {
-		return localResult("decrypt webhook url: %v", err)
-	}
-
-	rawURL := string(webhookURL)
-	if ch.SecretEncrypted != nil && len(*ch.SecretEncrypted) > 0 {
-		secret, err := s.cipher.Decrypt(*ch.SecretEncrypted)
-		if err != nil {
-			return localResult("decrypt sign secret: %v", err)
-		}
+	rawURL := ch.WebhookURL
+	if ch.Secret != "" {
 		// 加签参数拼在 webhook URL 上：&timestamp=<毫秒>&sign=<urlencoded>
 		ts := time.Now().UnixMilli()
-		sign := url.QueryEscape(DingTalkSign(string(secret), ts))
+		sign := url.QueryEscape(DingTalkSign(ch.Secret, ts))
 		sep := "&"
 		if !strings.Contains(rawURL, "?") {
 			sep = "?"
@@ -75,6 +63,7 @@ func (s *DingTalkSender) Send(ctx context.Context, ch *model.Channel, payload []
 			return localResult("payload is not valid JSON: %v", err)
 		}
 		m["at"] = map[string]any{"isAtAll": true}
+		var err error
 		body, err = json.Marshal(m)
 		if err != nil {
 			return localResult("marshal payload: %v", err)

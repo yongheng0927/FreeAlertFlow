@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
-	"github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 )
 
 // 飞书自定义机器人业务错误码（官方文档中的 webhook 错误码）
@@ -92,18 +91,16 @@ type Sender interface {
 	Send(ctx context.Context, ch *model.Channel, payload []byte) SendResult
 }
 
-// FeishuSender 把渲染好的消息 POST 到飞书自定义机器人 webhook，负责解密
-// 凭证并在配置时附加签名（FR-2.2）
+// FeishuSender 把渲染好的消息 POST 到飞书自定义机器人 webhook，并在配置时
+// 附加签名（FR-2.2）
 type FeishuSender struct {
 	client *http.Client
-	cipher *crypto.Cipher
 }
 
 // NewFeishuSender 创建带指定请求超时的 FeishuSender
-func NewFeishuSender(cipher *crypto.Cipher, timeout time.Duration) *FeishuSender {
+func NewFeishuSender(timeout time.Duration) *FeishuSender {
 	return &FeishuSender{
 		client: &http.Client{Timeout: timeout},
-		cipher: cipher,
 	}
 }
 
@@ -123,13 +120,8 @@ func localResult(format string, args ...any) SendResult {
 }
 
 func (s *FeishuSender) Send(ctx context.Context, ch *model.Channel, payload []byte) SendResult {
-	url, err := s.cipher.Decrypt(ch.WebhookURLEncrypted)
-	if err != nil {
-		return localResult("decrypt webhook url: %v", err)
-	}
-
 	body := payload
-	hasSecret := ch.SecretEncrypted != nil && len(*ch.SecretEncrypted) > 0
+	hasSecret := ch.Secret != ""
 	if ch.AtAll || hasSecret {
 		// AtAll 注入和加签都要改写消息体：一次 unmarshal/marshal 完成，
 		// 先注入 @所有人，再加时间戳和签名
@@ -141,21 +133,18 @@ func (s *FeishuSender) Send(ctx context.Context, ch *model.Channel, payload []by
 			injectFeishuAtAll(m)
 		}
 		if hasSecret {
-			secret, err := s.cipher.Decrypt(*ch.SecretEncrypted)
-			if err != nil {
-				return localResult("decrypt sign secret: %v", err)
-			}
 			ts := time.Now().Unix()
 			m["timestamp"] = strconv.FormatInt(ts, 10)
-			m["sign"] = Sign(string(secret), ts)
+			m["sign"] = Sign(ch.Secret, ts)
 		}
+		var err error
 		body, err = json.Marshal(m)
 		if err != nil {
 			return localResult("marshal payload: %v", err)
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, string(url), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ch.WebhookURL, bytes.NewReader(body))
 	if err != nil {
 		return localResult("build request: %v", err)
 	}

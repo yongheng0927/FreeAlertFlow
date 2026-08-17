@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const testSecret = "0123456789abcdef0123456789abcdef" // 恰好 32 字节
-
 // setTestDatabaseEnv 设置最小可用的数据库环境变量
 func setTestDatabaseEnv(t *testing.T) {
 	t.Helper()
@@ -37,7 +35,6 @@ func clearFenghuoEnv(t *testing.T) {
 func TestDefaults(t *testing.T) {
 	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	setTestDatabaseEnv(t)
 
 	cfg, err := Load()
@@ -83,7 +80,6 @@ func TestDefaults(t *testing.T) {
 func TestEnvOverridesDefaults(t *testing.T) {
 	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	setTestDatabaseEnv(t)
 	t.Setenv("FENGHUO_SERVER_HTTP_ADDR", "0.0.0.0:9090")
 	t.Setenv("FENGHUO_JWT_ACCESS_TTL", "30m")
@@ -123,7 +119,6 @@ database:
   user: "faf"
   password: "pass"
   dbname: "freealertflow"
-secret_key: "` + testSecret + `"
 `)
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), yaml, 0o600); err != nil {
 		t.Fatal(err)
@@ -153,29 +148,9 @@ secret_key: "` + testSecret + `"
 	}
 }
 
-func TestSecretKeyRequired(t *testing.T) {
-	clearFenghuoEnv(t)
-	t.Chdir(t.TempDir())
-	setTestDatabaseEnv(t)
-	if _, err := Load(); err == nil {
-		t.Fatal("Load must fail without FENGHUO_SECRET_KEY")
-	}
-}
-
-func TestSecretKeyMustBe32Bytes(t *testing.T) {
-	clearFenghuoEnv(t)
-	t.Chdir(t.TempDir())
-	t.Setenv("FENGHUO_SECRET_KEY", "too-short")
-	setTestDatabaseEnv(t)
-	if _, err := Load(); err == nil {
-		t.Fatal("Load must fail when FENGHUO_SECRET_KEY is not 32 bytes")
-	}
-}
-
 func TestDatabaseConfigRequired(t *testing.T) {
 	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	if _, err := Load(); err == nil {
 		t.Fatal("Load must fail without database user/dbname")
 	}
@@ -215,7 +190,6 @@ func TestBasePath(t *testing.T) {
 func TestOAuthEnabledRequiresCredentials(t *testing.T) {
 	clearFenghuoEnv(t)
 	t.Chdir(t.TempDir())
-	t.Setenv("FENGHUO_SECRET_KEY", testSecret)
 	setTestDatabaseEnv(t)
 	t.Setenv("FENGHUO_OAUTH_ENABLED", "true")
 	if _, err := Load(); err == nil {

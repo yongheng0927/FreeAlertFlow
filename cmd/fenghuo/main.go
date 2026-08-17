@@ -16,7 +16,6 @@ import (
 	"github.com/yongheng0927/fenghuo/internal/config"
 	"github.com/yongheng0927/fenghuo/internal/database"
 	"github.com/yongheng0927/fenghuo/internal/handler"
-	fafcrypto "github.com/yongheng0927/fenghuo/internal/pkg/crypto"
 	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
 	"github.com/yongheng0927/fenghuo/internal/pkg/render"
 	"github.com/yongheng0927/fenghuo/internal/service"
@@ -80,14 +79,10 @@ func run() error {
 	authSvc := service.NewAuthService(userStore, tokenStore, jwtMgr)
 
 	// M2 核心链路：webhook 接入 -> 去重 -> 路由 -> 渲染 -> 发送
-	cipher, err := fafcrypto.New([]byte(cfg.SecretKey))
-	if err != nil {
-		return err
-	}
 	sender := service.NewDispatcher(
-		service.NewFeishuSender(cipher, cfg.Channel.HTTPTimeout),
-		service.NewDingTalkSender(cipher, cfg.Channel.HTTPTimeout),
-		service.NewWeComSender(cipher, cfg.Channel.HTTPTimeout),
+		service.NewFeishuSender(cfg.Channel.HTTPTimeout),
+		service.NewDingTalkSender(cfg.Channel.HTTPTimeout),
+		service.NewWeComSender(cfg.Channel.HTTPTimeout),
 	)
 	renderEngine := render.NewEngine(nil)
 	deliverer := service.NewDeliverer(
@@ -99,7 +94,7 @@ func run() error {
 
 	// M3 管理服务
 	sourceSvc := service.NewSourceService(sourceStore, ruleStore, alertStore)
-	channelSvc := service.NewChannelService(channelStore, ruleStore, templateStore, cipher, sender)
+	channelSvc := service.NewChannelService(channelStore, ruleStore, templateStore, sender)
 	templateSvc := service.NewTemplateService(templateStore, channelStore, alertStore, renderEngine, sender, cfg.Server.RootURL)
 	ruleSvc := service.NewRuleService(ruleStore, sourceStore, channelStore)
 	userAdminSvc := service.NewUserAdminService(userStore, tokenStore, oauthStore, cfg.Admin.User)

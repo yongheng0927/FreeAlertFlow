@@ -27,7 +27,6 @@ func TestDingTalkSignKnownAnswer(t *testing.T) {
 }
 
 func TestDingTalkSendSuccessWithSign(t *testing.T) {
-	cipher := testCipher(t)
 	var gotBody map[string]any
 	var gotQuery url.Values
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,12 +37,11 @@ func TestDingTalkSendSuccessWithSign(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	secret := encrypt(t, cipher, "SECabc")
 	ch := &model.Channel{
-		WebhookURLEncrypted: encrypt(t, cipher, srv.URL+"/robot/send?access_token=token123"),
-		SecretEncrypted:     &secret,
+		WebhookURL: srv.URL + "/robot/send?access_token=token123",
+		Secret:     "SECabc",
 	}
-	sender := NewDingTalkSender(cipher, 5*time.Second)
+	sender := NewDingTalkSender(5 * time.Second)
 	res := sender.Send(context.Background(), ch,
 		[]byte(`{"msgtype":"markdown","markdown":{"title":"[FIRING] HighCPU","text":"**告警** 内容"}}`))
 	if !res.Success() {
@@ -77,7 +75,6 @@ func TestDingTalkSendSuccessWithSign(t *testing.T) {
 // TestDingTalkSendAtAll 渠道的 AtAll 打开时，Sender 往消息体合并
 // at.isAtAll（覆盖模板自带的 at 字段）
 func TestDingTalkSendAtAll(t *testing.T) {
-	cipher := testCipher(t)
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -86,8 +83,8 @@ func TestDingTalkSendAtAll(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL), AtAll: true}
-	res := NewDingTalkSender(cipher, 5*time.Second).
+	ch := &model.Channel{WebhookURL: srv.URL, AtAll: true}
+	res := NewDingTalkSender(5 * time.Second).
 		Send(context.Background(), ch, []byte(`{"msgtype":"text","text":{"content":"hi"}}`))
 	if !res.Success() {
 		t.Fatalf("result = %+v, want success", res)
@@ -98,13 +95,12 @@ func TestDingTalkSendAtAll(t *testing.T) {
 }
 
 func TestDingTalkSendBusinessError(t *testing.T) {
-	cipher := testCipher(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"errcode":310000,"errmsg":"keywords not in content"}`))
 	}))
 	defer srv.Close()
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL)}
-	res := NewDingTalkSender(cipher, 5*time.Second).
+	ch := &model.Channel{WebhookURL: srv.URL}
+	res := NewDingTalkSender(5 * time.Second).
 		Send(context.Background(), ch, []byte(`{"msgtype":"text","text":{"content":"hi"}}`))
 	if res.Success() || res.Retryable() {
 		t.Fatalf("business error must be a non-retryable failure: %+v", res)
@@ -129,7 +125,6 @@ func TestDingTalkRateLimitRetryable(t *testing.T) {
 }
 
 func TestWeComSendSuccess(t *testing.T) {
-	cipher := testCipher(t)
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {
@@ -142,8 +137,8 @@ func TestWeComSendSuccess(t *testing.T) {
 	defer srv.Close()
 
 	// 企微不支持 @人：AtAll 打开时消息体也必须原样透传
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL), AtAll: true}
-	res := NewWeComSender(cipher, 5*time.Second).
+	ch := &model.Channel{WebhookURL: srv.URL, AtAll: true}
+	res := NewWeComSender(5 * time.Second).
 		Send(context.Background(), ch, []byte(`{"msgtype":"markdown","markdown":{"content":"**告警**"}}`))
 	if !res.Success() {
 		t.Fatalf("result = %+v, want success", res)
@@ -159,7 +154,6 @@ func TestWeComSendSuccess(t *testing.T) {
 // TestFeishuSendAtAllText AtAll 打开时，text 消息的 content.text 末尾追加
 // @所有人标记
 func TestFeishuSendAtAllText(t *testing.T) {
-	cipher := testCipher(t)
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -168,8 +162,8 @@ func TestFeishuSendAtAllText(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL), AtAll: true}
-	res := NewFeishuSender(cipher, 5*time.Second).
+	ch := &model.Channel{WebhookURL: srv.URL, AtAll: true}
+	res := NewFeishuSender(5 * time.Second).
 		Send(context.Background(), ch, []byte(`{"msg_type":"text","content":{"text":"[FIRING] HighCPU"}}`))
 	if !res.Success() {
 		t.Fatalf("result = %+v, want success", res)
@@ -183,7 +177,6 @@ func TestFeishuSendAtAllText(t *testing.T) {
 // TestFeishuSendAtAllCard AtAll 打开时，互动卡片 elements 末尾追加一个
 // lark_md div；加签与注入在同一次改写中完成
 func TestFeishuSendAtAllCardWithSign(t *testing.T) {
-	cipher := testCipher(t)
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -192,14 +185,13 @@ func TestFeishuSendAtAllCardWithSign(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	secret := encrypt(t, cipher, "sign-secret")
 	ch := &model.Channel{
-		WebhookURLEncrypted: encrypt(t, cipher, srv.URL),
-		SecretEncrypted:     &secret,
-		AtAll:               true,
+		WebhookURL: srv.URL,
+		Secret:     "sign-secret",
+		AtAll:      true,
 	}
 	payload := `{"msg_type":"interactive","card":{"header":{"template":"red","title":{"tag":"plain_text","content":"t"}},"elements":[{"tag":"div","text":{"tag":"lark_md","content":"body"}}]}}`
-	res := NewFeishuSender(cipher, 5*time.Second).Send(context.Background(), ch, []byte(payload))
+	res := NewFeishuSender(5 * time.Second).Send(context.Background(), ch, []byte(payload))
 	if !res.Success() {
 		t.Fatalf("result = %+v, want success", res)
 	}
@@ -223,7 +215,6 @@ func TestFeishuSendAtAllCardWithSign(t *testing.T) {
 // TestFeishuSendAtAllOtherTypes post/image 等类型没有通用的注入位置，
 // 消息体原样透传
 func TestFeishuSendAtAllOtherTypes(t *testing.T) {
-	cipher := testCipher(t)
 	var gotRaw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotRaw, _ = io.ReadAll(r.Body)
@@ -231,9 +222,9 @@ func TestFeishuSendAtAllOtherTypes(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ch := &model.Channel{WebhookURLEncrypted: encrypt(t, cipher, srv.URL), AtAll: true}
+	ch := &model.Channel{WebhookURL: srv.URL, AtAll: true}
 	payload := `{"msg_type":"image","content":{"image_key":"img_x"}}`
-	res := NewFeishuSender(cipher, 5*time.Second).Send(context.Background(), ch, []byte(payload))
+	res := NewFeishuSender(5 * time.Second).Send(context.Background(), ch, []byte(payload))
 	if !res.Success() {
 		t.Fatalf("result = %+v, want success", res)
 	}

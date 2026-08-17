@@ -120,11 +120,12 @@ func newChannelService(t *testing.T) (*ChannelService, *fakeChannelStore, *fakeR
 	rules := &fakeRuleStore{}
 	templates := newFakeTemplateStore(t)
 	sender := &fakeSender{results: []SendResult{okResult()}}
-	svc := NewChannelService(channels, rules, templates, testCipher(t), sender)
+	svc := NewChannelService(channels, rules, templates, sender)
 	return svc, channels, rules, templates, sender
 }
 
-func TestChannelCreateEncryptsCredentials(t *testing.T) {
+// TestChannelCreateStoresCredentialsPlaintext 凭证明文入库，API 视图脱敏
+func TestChannelCreateStoresCredentialsPlaintext(t *testing.T) {
 	svc, channels, _, _, _ := newChannelService(t)
 	ch, err := svc.Create(context.Background(), ChannelInput{
 		Name:       "值班群",
@@ -138,10 +139,10 @@ func TestChannelCreateEncryptsCredentials(t *testing.T) {
 		t.Errorf("type = %q, want feishu", ch.Type)
 	}
 	stored := channels.byID[ch.ID]
-	if strings.Contains(string(stored.WebhookURLEncrypted), "abcdef123456") {
-		t.Error("webhook url must be stored encrypted")
+	if stored.WebhookURL != "https://open.feishu.cn/open-apis/bot/v2/hook/abcdef123456" {
+		t.Errorf("webhook url must be stored in plaintext, got %q", stored.WebhookURL)
 	}
-	// 往返验证：解密得到原值，视图里是脱敏后的
+	// 视图里是脱敏后的
 	v, err := svc.View(stored)
 	if err != nil {
 		t.Fatalf("View: %v", err)
@@ -193,7 +194,7 @@ func TestChannelCreateDingTalkAndWeCom(t *testing.T) {
 	if dt.Type != "dingtalk" {
 		t.Errorf("type = %q", dt.Type)
 	}
-	if channels.byID[dt.ID].SecretEncrypted == nil {
+	if channels.byID[dt.ID].Secret != "SECdingsecret" {
 		t.Error("dingtalk secret must be stored (sign supported)")
 	}
 
@@ -205,7 +206,7 @@ func TestChannelCreateDingTalkAndWeCom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create wecom: %v", err)
 	}
-	if channels.byID[wc.ID].SecretEncrypted != nil {
+	if channels.byID[wc.ID].Secret != "" {
 		t.Error("wecom has no sign mechanism; secret must be ignored")
 	}
 }
@@ -215,17 +216,17 @@ func TestChannelUpdateKeepsCredentials(t *testing.T) {
 	ch, _ := svc.Create(context.Background(), ChannelInput{
 		Name: "值班群", WebhookURL: "https://open.feishu.cn/hook/aaaabbbb", Enabled: true,
 	}, "secret-1")
-	origURL := channels.byID[ch.ID].WebhookURLEncrypted
+	origURL := channels.byID[ch.ID].WebhookURL
 
 	// 只改名字：凭证不动
 	if _, err := svc.Update(context.Background(), ch.ID, ChannelPatch{Name: strPtr("新名字")}); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	stored := channels.byID[ch.ID]
-	if string(stored.WebhookURLEncrypted) != string(origURL) {
+	if stored.WebhookURL != origURL {
 		t.Error("webhook url must be kept when not resubmitted")
 	}
-	if stored.SecretEncrypted == nil {
+	if stored.Secret != "secret-1" {
 		t.Error("secret must be kept when not resubmitted")
 	}
 
@@ -237,7 +238,7 @@ func TestChannelUpdateKeepsCredentials(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 	stored = channels.byID[ch.ID]
-	if stored.SecretEncrypted != nil {
+	if stored.Secret != "" {
 		t.Error("explicit empty secret must clear the secret")
 	}
 	v, _ := svc.View(stored)
