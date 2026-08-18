@@ -137,6 +137,19 @@ func TestRenderRejectsBadTemplate(t *testing.T) {
 	}
 }
 
+// TestRenderRejectsEnvFuncs 模板引擎使用 Hermetic 函数表，env/expandenv/
+// getHostByName 等可读取进程环境或网络的函数必须不可用，防止模板编辑者
+// 通过渲染窃取服务器机密
+func TestRenderRejectsEnvFuncs(t *testing.T) {
+	engine := NewEngine(nil)
+	for _, fn := range []string{"env", "expandenv", "getHostByName"} {
+		tmpl := `{"msg_type":"text","content":{"text":"{{ ` + fn + ` \"HOME\" }}"}}`
+		if _, err := engine.Render(tmpl, sampleContext(), "feishu"); err == nil {
+			t.Errorf("template using %q must fail to parse", fn)
+		}
+	}
+}
+
 // TestValidatePayloadJSON 按渠道类型校验渲染结果的消息类型字段
 func TestValidatePayloadJSON(t *testing.T) {
 	cases := []struct {

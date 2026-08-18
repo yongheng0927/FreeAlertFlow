@@ -119,7 +119,9 @@ func ValidatePayloadJSON(s, channelType string) error {
 }
 
 func (e *Engine) funcMap() template.FuncMap {
-	fm := sprig.TxtFuncMap()
+	// 使用 Hermetic 版本：排除 env/expandenv 等可读取进程环境变量的函数，
+	// 防止有模板编辑权限的用户通过模板渲染窃取服务器机密（如 DB 密码、JWT 密钥）
+	fm := sprig.HermeticTxtFuncMap()
 	fm["severityColor"] = SeverityColor
 	fm["timeFormat"] = e.timeFormat
 	fm["label"] = labelValue
