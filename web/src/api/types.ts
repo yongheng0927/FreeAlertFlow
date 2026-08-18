@@ -36,6 +36,11 @@ export interface User {
   created_at: string
 }
 
+/** 首次启动引导状态：initialized=false 表示尚未创建引导管理员 */
+export interface SetupStatus {
+  initialized: boolean
+}
+
 export interface SystemInfo {
   version: string
   root_url: string
@@ -76,6 +81,8 @@ export interface TestSendResult {
   code: number
   msg: string
   duration_ms: number
+  /** 模板测试发送时标识渲染用的告警来源；渠道测试发送时为空 */
+  source?: 'request' | 'latest_alert' | 'sample'
 }
 
 export interface Template {
@@ -94,6 +101,8 @@ export interface Template {
 export interface TemplatePreview {
   /** 渲染出的渠道消息体 JSON 字符串 */
   rendered: string
+  /** 渲染时实际使用的告警数据来源：request(请求传入) / latest_alert(最近真实告警) / sample(内置样例) */
+  source: 'request' | 'latest_alert' | 'sample'
 }
 
 export interface RoutingRule {

@@ -16,7 +16,7 @@ func TestNewRouterRegistersAllRoutes(t *testing.T) {
 		"GET": {
 			"/healthz", "/readyz", "/metrics",
 			"/api/auth/oauth/:provider", "/api/auth/oauth/:provider/callback",
-			"/api/v1/users/me", "/api/v1/system/info",
+			"/api/v1/users/me", "/api/v1/system/info", "/api/v1/setup/status",
 			"/api/v1/sources", "/api/v1/sources/:id",
 			"/api/v1/channels", "/api/v1/channels/:id",
 			"/api/v1/templates", "/api/v1/templates/:id",
@@ -27,7 +27,7 @@ func TestNewRouterRegistersAllRoutes(t *testing.T) {
 		},
 		"POST": {
 			"/api/auth/login", "/api/auth/refresh", "/api/auth/logout",
-			"/api/v1/alerts/webhook/:token",
+			"/api/v1/setup", "/api/v1/alerts/webhook/:token",
 			"/api/v1/sources", "/api/v1/sources/:id/rotate-token",
 			"/api/v1/channels", "/api/v1/channels/:id/test",
 			"/api/v1/templates", "/api/v1/templates/preview", "/api/v1/templates/test-send",

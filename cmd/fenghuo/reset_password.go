@@ -7,7 +7,7 @@
 //	fenghuo reset-admin-password --password NEW   # 指定新密码
 //
 // 配置读取与服务模式一致（环境变量 > config.yaml），因此容器内执行时
-// 天然使用与运行中实例相同的数据库和管理员账号
+// 天然使用与运行中实例相同的数据库；初始管理员通过 users.is_bootstrap 定位
 package main
 
 import (
@@ -34,10 +34,6 @@ func resetAdminPassword(args []string) error {
 	if err != nil {
 		return err
 	}
-	if cfg.Admin.User == "" {
-		return fmt.Errorf("FENGHUO_ADMIN_USER is not configured, no initial admin to reset")
-	}
-
 	db, err := database.Open(cfg.Database.DSN())
 	if err != nil {
 		return err
@@ -45,15 +41,15 @@ func resetAdminPassword(args []string) error {
 	users := service.NewGormUserStore(db)
 	tokens := service.NewGormRefreshTokenStore(db)
 	oauth := service.NewGormOAuthIdentityStore(db)
-	svc := service.NewUserAdminService(users, tokens, oauth, cfg.Admin.User)
+	svc := service.NewUserAdminService(users, tokens, oauth)
 
 	ctx := context.Background()
-	admin, err := users.FindByUsername(ctx, cfg.Admin.User)
+	admin, err := users.FindBootstrap(ctx)
 	if err != nil {
 		return err
 	}
 	if admin == nil {
-		return fmt.Errorf("initial admin %q not found in database", cfg.Admin.User)
+		return fmt.Errorf("setup not completed yet: no bootstrap admin in database")
 	}
 
 	newPw := *pw

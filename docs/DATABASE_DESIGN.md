@@ -19,6 +19,7 @@
 | avatar_url | VARCHAR(512) | NOT NULL DEFAULT '' | 头像（飞书同步） |
 | role | VARCHAR(16) | NOT NULL DEFAULT 'viewer' | `admin` / `editor` / `viewer`（能力矩阵见 REQUIREMENTS FR-5.4） |
 | enabled | BOOLEAN | NOT NULL DEFAULT TRUE | 禁用后 JWT 即时失效 |
+| is_bootstrap | BOOLEAN | NOT NULL DEFAULT FALSE | 引导创建的初始管理员（FR-5.1，setup 接口创建）；受保护不可降级/禁用/删除；部分唯一索引 `uq_users_single_bootstrap` 保证全表至多一行 TRUE |
 | last_login_at | TIMESTAMPTZ | NULL | 最近登录时间 |
 
 设计说明：

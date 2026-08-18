@@ -19,7 +19,7 @@ cp docker-compose.example.yaml docker-compose.yaml   # 按需修改密钥等配�
 docker compose up -d --build
 ```
 
-访问 http://localhost:8080 ，使用 compose 中 `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD` 配置的初始管理员登录。
+访问 http://localhost:8080 ，首次访问按页面引导设置管理员账号。
 
 ## 配置
 

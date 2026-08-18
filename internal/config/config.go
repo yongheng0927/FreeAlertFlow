@@ -20,7 +20,6 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
-	Admin    AdminConfig
 	Log      LogConfig
 	Alert    AlertConfig
 	Channel  ChannelConfig
@@ -61,11 +60,6 @@ type JWTConfig struct {
 	Secret     string
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
-}
-
-type AdminConfig struct {
-	User     string
-	Password string
 }
 
 type LogConfig struct {
@@ -139,10 +133,6 @@ func Load() (*Config, error) {
 			Secret:     v.GetString("jwt.secret"),
 			AccessTTL:  v.GetDuration("jwt.access_ttl"),
 			RefreshTTL: v.GetDuration("jwt.refresh_ttl"),
-		},
-		Admin: AdminConfig{
-			User:     v.GetString("admin.user"),
-			Password: v.GetString("admin.password"),
 		},
 		Log: LogConfig{Level: v.GetString("log.level")},
 		Alert: AlertConfig{

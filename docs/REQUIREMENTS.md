@@ -155,7 +155,7 @@ POST /api/v1/alerts/webhook/:token
 
 ### 4.5 认证与用户
 
-- [x] **FR-5.1** 本地账号登录：用户名 + 密码（bcrypt），首次启动若无用户则引导创建管理员（或环境变量预置 `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD`）。
+- [x] **FR-5.1** 本地账号登录：用户名 + 密码（bcrypt），首次启动后通过 Web 界面引导创建管理员（`POST /api/v1/setup`，完成后该接口关闭）。
 
 - [x] **FR-5.2 JWT 认证**：
 
@@ -219,7 +219,6 @@ FENGHUO_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 | `FENGHUO_DATABASE_USER` / `FENGHUO_DATABASE_PASSWORD` / `FENGHUO_DATABASE_DBNAME` | — | PostgreSQL 账号、密码、库名（user/dbname 必填） |
 | `FENGHUO_DATABASE_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
 | `FENGHUO_JWT_SECRET` | 随机生成（启动警告） | JWT 签名密钥 |
-| `FENGHUO_ADMIN_USER` / `FENGHUO_ADMIN_PASSWORD` | — | 初始管理员 |
 | `FENGHUO_OAUTH_*` | — | OAuth2 配置，见 4.5 |
 | `FENGHUO_LOG_LEVEL` | `info` | 日志级别 |
 | `FENGHUO_ALERT_DEDUP_WINDOW` | `5m` | 告警去重窗口（FR-1.3），`0` 表示关闭去重 |

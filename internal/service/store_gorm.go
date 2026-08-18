@@ -48,6 +48,25 @@ func (s *GormUserStore) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
+func (s *GormUserStore) CountBootstrapAdmins(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&model.User{}).
+		Where("is_bootstrap").Count(&n).Error
+	return n, err
+}
+
+func (s *GormUserStore) FindBootstrap(ctx context.Context) (*model.User, error) {
+	var u model.User
+	err := s.db.WithContext(ctx).Where("is_bootstrap").Take(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (s *GormUserStore) List(ctx context.Context, offset, limit int) ([]model.User, int64, error) {
 	var total int64
 	if err := s.db.WithContext(ctx).Model(&model.User{}).Count(&total).Error; err != nil {

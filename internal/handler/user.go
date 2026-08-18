@@ -14,14 +14,13 @@ import (
 
 // UserHandler 提供 /api/v1/users/me 端点
 type UserHandler struct {
-	auth         *service.AuthService
-	users        service.UserStore
-	initialAdmin string // 初始管理员用户名，用于标记 is_initial
+	auth  *service.AuthService
+	users service.UserStore
 }
 
 // NewUserHandler 创建 UserHandler
-func NewUserHandler(auth *service.AuthService, users service.UserStore, initialAdmin string) *UserHandler {
-	return &UserHandler{auth: auth, users: users, initialAdmin: initialAdmin}
+func NewUserHandler(auth *service.AuthService, users service.UserStore) *UserHandler {
+	return &UserHandler{auth: auth, users: users}
 }
 
 type userResponse struct {
@@ -66,7 +65,7 @@ func (h *UserHandler) Me(c *gin.Context) {
 		return
 	}
 	v := toUserResponse(user)
-	v.IsInitial = h.initialAdmin != "" && user.Username == h.initialAdmin
+	v.IsInitial = user.IsBootstrap
 	c.JSON(http.StatusOK, v)
 }
 

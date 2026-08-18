@@ -80,7 +80,13 @@ func NewRouter(d *Deps) *gin.Engine {
 	// 展示 OAuth 登录入口（M4），返回字段均不敏感
 	base.GET("/api/v1/system/info", sys.Info)
 
-	userH := NewUserHandler(d.Auth, d.Users, d.Config.Admin.User)
+	// 公开的首次启动引导（FR-5.1）：查询/完成初始管理员设置，setup 完成
+	// 后 POST 一律 403；带与登录一致的按 IP 限流
+	setupH := NewSetupHandler(d.Auth, d.Limiter)
+	base.GET("/api/v1/setup/status", setupH.Status)
+	base.POST("/api/v1/setup", setupH.Setup)
+
+	userH := NewUserHandler(d.Auth, d.Users)
 	sourceH := NewSourceHandler(d.Sources, d.SourceStore)
 	channelH := NewChannelHandler(d.Channels, d.ChannelStore)
 	templateH := NewTemplateHandler(d.Templates, d.TemplateStore)

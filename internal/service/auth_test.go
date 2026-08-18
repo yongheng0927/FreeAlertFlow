@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/yongheng0927/fenghuo/internal/model"
 	fafjwt "github.com/yongheng0927/fenghuo/internal/pkg/jwt"
@@ -39,6 +42,25 @@ func (f *fakeUserStore) Count(_ context.Context) (int64, error) {
 	return int64(len(f.byID)), nil
 }
 
+func (f *fakeUserStore) CountBootstrapAdmins(_ context.Context) (int64, error) {
+	var n int64
+	for _, u := range f.byID {
+		if u.IsBootstrap {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeUserStore) FindBootstrap(_ context.Context) (*model.User, error) {
+	for _, u := range f.byID {
+		if u.IsBootstrap {
+			return u, nil
+		}
+	}
+	return nil, nil
+}
+
 func (f *fakeUserStore) Create(_ context.Context, u *model.User) error {
 	u.ID = f.nextID
 	f.nextID++
@@ -65,6 +87,13 @@ func (f *fakeUserStore) addUser(username, pw string, role string, enabled bool) 
 	}
 	u := &model.User{Username: username, PasswordHash: hash, Role: role, Enabled: enabled}
 	_ = f.Create(context.Background(), u)
+	return u
+}
+
+// addBootstrapUser 添加引导创建的初始管理员（is_bootstrap 标记）
+func (f *fakeUserStore) addBootstrapUser(username, pw string) *model.User {
+	u := f.addUser(username, pw, model.RoleAdmin, true)
+	u.IsBootstrap = true
 	return u
 }
 
@@ -325,40 +354,90 @@ func TestChangePasswordOAuthOnlyUser(t *testing.T) {
 	}
 }
 
-// --- bootstrap ---
+// --- setup（首次启动引导，FR-5.1） ---
 
-func TestBootstrapAdminCreatesUserWhenEmpty(t *testing.T) {
+func TestSetupCreatesBootstrapAdmin(t *testing.T) {
 	svc, users, _ := newTestAuth()
-	created, err := svc.BootstrapAdmin(context.Background(), "admin", "admin-pw-123")
-	if err != nil || !created {
-		t.Fatalf("BootstrapAdmin = (%v, %v)", created, err)
+	ok, err := svc.Initialized(context.Background())
+	if err != nil || ok {
+		t.Fatalf("Initialized = (%v, %v), want (false, nil)", ok, err)
 	}
-	admin, _ := users.FindByUsername(context.Background(), "admin")
-	if admin == nil || admin.Role != model.RoleAdmin || !admin.Enabled {
-		t.Fatal("bootstrap admin must exist with admin role")
+
+	pair, err := svc.Setup(context.Background(), " admin ", "admin-pw-123")
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	if pair.AccessToken == "" || pair.RefreshToken == "" {
+		t.Fatal("setup must issue a token pair")
+	}
+	admin, _ := users.FindByUsername(context.Background(), "admin") // 用户名去空格
+	if admin == nil || admin.Role != model.RoleAdmin || !admin.Enabled || !admin.IsBootstrap {
+		t.Fatalf("bootstrap admin = %+v", admin)
+	}
+	if admin.Name != "admin" {
+		t.Fatalf("name = %q, want username as display name", admin.Name)
 	}
 	if _, _, err := svc.Login(context.Background(), "admin", "admin-pw-123"); err != nil {
 		t.Fatalf("bootstrap admin must be able to log in: %v", err)
 	}
+	if ok, _ := svc.Initialized(context.Background()); !ok {
+		t.Fatal("Initialized must be true after setup")
+	}
 }
 
-func TestBootstrapAdminNoOpWhenUsersExist(t *testing.T) {
+func TestSetupRejectedWhenInitialized(t *testing.T) {
 	svc, users, _ := newTestAuth()
-	users.addUser("alice", "pw-123456", model.RoleViewer, true)
-	created, err := svc.BootstrapAdmin(context.Background(), "admin", "admin-pw-123")
-	if err != nil || created {
-		t.Fatalf("BootstrapAdmin = (%v, %v), want no-op", created, err)
+	users.addBootstrapUser("admin", "admin-pw-123")
+	if _, err := svc.Setup(context.Background(), "other", "other-pw-123"); !errors.Is(err, ErrSetupCompleted) {
+		t.Fatalf("err = %v, want ErrSetupCompleted", err)
 	}
-	if n, _ := users.Count(context.Background()); n != 1 {
-		t.Fatalf("user count = %d, want 1", n)
+	// 已有普通用户（如 OAuth 自动建号）但无引导管理员时 setup 仍可用
+	users2 := newFakeUserStore()
+	users2.addUser("oauth-user", "", model.RoleViewer, true)
+	tokens := newFakeTokenStore()
+	jwtMgr := fafjwt.NewManager([]byte("test-secret-0123456789abcdef0123"), 2*time.Hour, 7*24*time.Hour)
+	svc2 := NewAuthService(users2, tokens, jwtMgr)
+	if _, err := svc2.Setup(context.Background(), "admin", "admin-pw-123"); err != nil {
+		t.Fatalf("setup with existing non-bootstrap users must work: %v", err)
 	}
 }
 
-func TestBootstrapAdminNoOpWithoutCredentials(t *testing.T) {
-	svc, _, _ := newTestAuth()
-	created, err := svc.BootstrapAdmin(context.Background(), "", "")
-	if err != nil || created {
-		t.Fatalf("BootstrapAdmin = (%v, %v), want no-op", created, err)
+func TestSetupValidation(t *testing.T) {
+	svc, users, _ := newTestAuth()
+	bad := [][2]string{
+		{"", "admin-pw-123"},          // 空用户名
+		{"   ", "admin-pw-123"},       // 纯空白用户名
+		{strings.Repeat("x", 65), "admin-pw-123"}, // 用户名超 64 字符
+		{"admin", "short"},            // 密码不足 8 位
+	}
+	for i, in := range bad {
+		if _, err := svc.Setup(context.Background(), in[0], in[1]); !errors.Is(err, ErrValidation) {
+			t.Errorf("case %d: err = %v, want ErrValidation", i, err)
+		}
+	}
+	if n, _ := users.Count(context.Background()); n != 0 {
+		t.Fatalf("users = %d, want 0 (failed setups must not persist)", n)
+	}
+}
+
+// raceyUserStore 模拟并发 setup 撞库：初始化检查通过（返回 0），Create 时
+// 撞 users 表的部分唯一索引（23505），对应 DB 层的兜底路径
+type raceyUserStore struct {
+	*fakeUserStore
+}
+
+func (r raceyUserStore) CountBootstrapAdmins(context.Context) (int64, error) { return 0, nil }
+
+func (r raceyUserStore) Create(context.Context, *model.User) error {
+	return &pgconn.PgError{Code: "23505"}
+}
+
+func TestSetupConcurrentConflict(t *testing.T) {
+	tokens := newFakeTokenStore()
+	jwtMgr := fafjwt.NewManager([]byte("test-secret-0123456789abcdef0123"), 2*time.Hour, 7*24*time.Hour)
+	svc := NewAuthService(raceyUserStore{newFakeUserStore()}, tokens, jwtMgr)
+	if _, err := svc.Setup(context.Background(), "admin", "admin-pw-123"); !errors.Is(err, ErrSetupCompleted) {
+		t.Fatalf("err = %v, want ErrSetupCompleted", err)
 	}
 }
 

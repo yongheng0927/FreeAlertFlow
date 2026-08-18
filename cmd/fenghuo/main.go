@@ -98,7 +98,7 @@ func run() error {
 	channelSvc := service.NewChannelService(channelStore, ruleStore, templateStore, sender)
 	templateSvc := service.NewTemplateService(templateStore, channelStore, alertStore, renderEngine, sender, cfg.Server.RootURL)
 	ruleSvc := service.NewRuleService(ruleStore, sourceStore, channelStore)
-	userAdminSvc := service.NewUserAdminService(userStore, tokenStore, oauthStore, cfg.Admin.User)
+	userAdminSvc := service.NewUserAdminService(userStore, tokenStore, oauthStore)
 
 	// M4：飞书 OAuth（FR-5.3）以及带配置注入的内嵌 SPA
 	var oauthSvc *service.OAuthService
@@ -118,15 +118,6 @@ func run() error {
 	}
 	if base := cfg.BasePath(); base != "" {
 		slog.Info("serving under root url sub-path", "base", base)
-	}
-
-	// 首次启动初始化时：当数据库为空且配置了 FENGHUO_ADMIN_USER/FENGHUO_ADMIN_PASSWORD  创建初始管理员（FR-5.1）
-	created, err := authSvc.BootstrapAdmin(context.Background(), cfg.Admin.User, cfg.Admin.Password)
-	if err != nil {
-		return err
-	}
-	if created {
-		slog.Info("initial admin user created", "username", cfg.Admin.User)
 	}
 
 	// NFR-1：固定窗口 1 分钟内 5 次登录失败后，锁定该 IP 10 分钟；
@@ -174,6 +165,15 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// 首次启动未完成初始化（引导管理员未创建）时提醒：需通过 Web 界面
+	// 完成 setup（FR-5.1）；之后每 10 分钟复查一次，直到 setup 完成
+	if ok, err := authSvc.Initialized(ctx); err != nil {
+		slog.Error("check setup status failed", "error", err)
+	} else if !ok {
+		slog.Warn("setup not completed: open the web UI to create the initial admin account")
+		go remindSetupPending(ctx, authSvc)
+	}
+
 	// 保留期清理后台任务（retention_days <= 0 时内部直接返回）
 	go service.NewRetentionCleaner(alertStore,
 		time.Duration(cfg.Alert.RetentionDays)*24*time.Hour).Run(ctx)
@@ -200,8 +200,29 @@ func run() error {
 	return nil
 }
 
-func setupLogger(level string) {
-	var lvl slog.Level
+// remindSetupPending 每 10 分钟提醒一次初始化未完成，直到 setup 完成或进程退出
+func remindSetupPending(ctx context.Context, authSvc *service.AuthService) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ok, err := authSvc.Initialized(ctx)
+			if err != nil {
+				slog.Error("check setup status failed", "error", err)
+				continue
+			}
+			if ok {
+				return
+			}
+			slog.Warn("setup not completed: open the web UI to create the initial admin account")
+		}
+	}
+}
+
+func setupLogger(level string) {	var lvl slog.Level
 	switch strings.ToLower(level) {
 	case "debug":
 		lvl = slog.LevelDebug

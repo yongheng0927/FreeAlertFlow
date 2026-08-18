@@ -8,6 +8,7 @@ import AuthProvider from './auth/AuthContext'
 import { RequireAuth } from './components/RequireAuth'
 import AppLayout from './components/AppLayout'
 import LoginPage from './pages/LoginPage'
+import SetupPage from './pages/SetupPage'
 import OAuthCallbackPage from './pages/OAuthCallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import AlertsPage from './pages/AlertsPage'
@@ -32,6 +33,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/setup" element={<SetupPage />} />
           <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
           <Route
             element={

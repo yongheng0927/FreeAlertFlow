@@ -4,9 +4,9 @@ import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAuth } from '../auth/useAuth'
-import { getSystemInfo } from '../api'
+import { getSetupStatus, getSystemInfo } from '../api'
 import { errorMessage } from '../api/client'
-import { runtimeConfig } from '../config'
+import { assetUrl, runtimeConfig } from '../config'
 import type { SystemInfo } from '../api/types'
 
 export default function LoginPage() {
@@ -24,6 +24,15 @@ export default function LoginPage() {
       .then(setSysInfo)
       .catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    // 未完成首次初始化时引导去创建管理员；请求失败静默留在登录页
+    getSetupStatus()
+      .then((status) => {
+        if (!status.initialized) navigate('/setup', { replace: true })
+      })
+      .catch(() => undefined)
+  }, [navigate])
 
   useEffect(() => {
     // OAuth 失败时后端会带 ?oauth_error=... 重定向回本页
@@ -59,7 +68,7 @@ export default function LoginPage() {
     >
       <Card style={{ width: 400, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <img src="/logo.svg" alt="烽火台" style={{ width: 56, height: 56, marginBottom: 8 }} />
+          <img src={assetUrl('logo.svg')} alt="烽火台" style={{ width: 56, height: 56, marginBottom: 8 }} />
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
             烽火台
           </Typography.Title>

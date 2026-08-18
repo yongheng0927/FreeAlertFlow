@@ -11,6 +11,7 @@ import type {
   ResendResult,
   Role,
   RoutingRule,
+  SetupStatus,
   Source,
   SystemInfo,
   Template,
@@ -28,6 +29,17 @@ export async function login(username: string, password: string): Promise<TokenPa
 
 export async function logout(refreshToken: string): Promise<void> {
   await api.post('/auth/logout', { refresh_token: refreshToken })
+}
+
+// ---- 首次启动引导（公开接口，无需 token） ----
+export async function getSetupStatus(): Promise<SetupStatus> {
+  const { data } = await api.get<SetupStatus>('/v1/setup/status')
+  return data
+}
+
+export async function setup(username: string, password: string): Promise<TokenPair> {
+  const { data } = await api.post<TokenPair>('/v1/setup', { username, password })
+  return data
 }
 
 // ---- 系统信息 / 当前用户 ----

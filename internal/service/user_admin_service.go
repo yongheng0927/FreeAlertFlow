@@ -14,7 +14,7 @@ import (
 var (
 	ErrLastAdmin        = errors.New("cannot disable, demote or delete the last admin")
 	ErrCannotDeleteSelf = errors.New("cannot delete your own account")
-	// ErrInitialAdmin 表示试图降级、禁用或删除初始管理员（FR-5.1 创建的账号）
+	// ErrInitialAdmin 表示试图降级、禁用或删除引导创建的初始管理员（FR-5.1）
 	ErrInitialAdmin = errors.New("the initial admin account cannot be demoted, disabled or deleted")
 )
 
@@ -23,18 +23,16 @@ type UserAdminService struct {
 	users  UserStore
 	tokens RefreshTokenStore
 	oauth  OAuthIdentityStore
-	// initialAdmin 是初始管理员的用户名（FENGHUO_ADMIN_USER），该账号受保护
-	initialAdmin string
 }
 
 // NewUserAdminService 创建 UserAdminService
-func NewUserAdminService(users UserStore, tokens RefreshTokenStore, oauth OAuthIdentityStore, initialAdmin string) *UserAdminService {
-	return &UserAdminService{users: users, tokens: tokens, oauth: oauth, initialAdmin: initialAdmin}
+func NewUserAdminService(users UserStore, tokens RefreshTokenStore, oauth OAuthIdentityStore) *UserAdminService {
+	return &UserAdminService{users: users, tokens: tokens, oauth: oauth}
 }
 
-// IsInitial 报告用户是否为受保护的初始管理员
+// IsInitial 报告用户是否为受保护的初始管理员（is_bootstrap 标记）
 func (s *UserAdminService) IsInitial(u *model.User) bool {
-	return s.initialAdmin != "" && u.Username == s.initialAdmin
+	return u.IsBootstrap
 }
 
 // ValidRole 报告 role 是否为 viewer/editor/admin 之一

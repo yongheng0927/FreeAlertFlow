@@ -32,6 +32,7 @@ type User struct {
 	AvatarURL    string     `gorm:"column:avatar_url"`
 	Role         string     `gorm:"column:role"`
 	Enabled      bool       `gorm:"column:enabled"`
+	IsBootstrap  bool       `gorm:"column:is_bootstrap"` // 引导创建的初始管理员（受保护，全表至多一行）
 	LastLoginAt  *time.Time `gorm:"column:last_login_at"`
 	CreatedAt    time.Time  `gorm:"column:created_at"`
 	UpdatedAt    time.Time  `gorm:"column:updated_at"`

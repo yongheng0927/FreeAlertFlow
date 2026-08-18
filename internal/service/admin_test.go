@@ -391,13 +391,16 @@ func TestTemplatePreviewFallbacks(t *testing.T) {
 	tmpl := `{"msg_type":"text","content":{"text":"**{{ label .CommonLabels "alertname" | jesc }}**"}}`
 
 	// 1. 显式给的告警 JSON 优先；rendered 是该渠道的消息体 JSON 字符串
-	rendered, err := svc.Preview(ctx, tmpl, "feishu", []byte(sampleWebhookJSON))
-	if err != nil || !strings.Contains(rendered, "HighCPU") {
-		t.Fatalf("explicit payload: rendered=%q err=%v", rendered, err)
+	res, err := svc.Preview(ctx, tmpl, "feishu", []byte(sampleWebhookJSON))
+	if err != nil || !strings.Contains(res.Rendered, "HighCPU") {
+		t.Fatalf("explicit payload: rendered=%q err=%v", res.Rendered, err)
+	}
+	if res.Source != PreviewSourceRequest {
+		t.Fatalf("explicit payload source want %s got %s", PreviewSourceRequest, res.Source)
 	}
 	var m map[string]any
-	if err := json.Unmarshal([]byte(rendered), &m); err != nil || m["msg_type"] != "text" {
-		t.Fatalf("rendered must be a feishu payload: %q err=%v", rendered, err)
+	if err := json.Unmarshal([]byte(res.Rendered), &m); err != nil || m["msg_type"] != "text" {
+		t.Fatalf("rendered must be a feishu payload: %q err=%v", res.Rendered, err)
 	}
 
 	// 按渠道类型校验：飞书 payload 用 dingtalk 类型预览必须失败
@@ -410,16 +413,22 @@ func TestTemplatePreviewFallbacks(t *testing.T) {
 	_ = alerts.Create(ctx, &model.Alert{
 		SourceID: 1, ReceivedAt: time.Now(), RawPayload: json.RawMessage(stored),
 	})
-	rendered, err = svc.Preview(ctx, tmpl, "feishu", nil)
-	if err != nil || !strings.Contains(rendered, "StoredAlert") {
-		t.Fatalf("latest stored alert: rendered=%q err=%v", rendered, err)
+	res, err = svc.Preview(ctx, tmpl, "feishu", nil)
+	if err != nil || !strings.Contains(res.Rendered, "StoredAlert") {
+		t.Fatalf("latest stored alert: rendered=%q err=%v", res.Rendered, err)
+	}
+	if res.Source != PreviewSourceLatestAlert {
+		t.Fatalf("latest stored alert source want %s got %s", PreviewSourceLatestAlert, res.Source)
 	}
 
 	// 3. store 为空：用内置样例
 	alerts.byID = map[int64]*model.Alert{}
-	rendered, err = svc.Preview(ctx, tmpl, "feishu", nil)
-	if err != nil || !strings.Contains(rendered, "HighCPU") {
-		t.Fatalf("builtin sample: rendered=%q err=%v", rendered, err)
+	res, err = svc.Preview(ctx, tmpl, "feishu", nil)
+	if err != nil || !strings.Contains(res.Rendered, "HighCPU") {
+		t.Fatalf("builtin sample: rendered=%q err=%v", res.Rendered, err)
+	}
+	if res.Source != PreviewSourceSample {
+		t.Fatalf("builtin sample source want %s got %s", PreviewSourceSample, res.Source)
 	}
 
 	// 4. 渲染错误、空内容、非法渠道类型都要报错
@@ -550,7 +559,7 @@ func newUserAdminService() (*UserAdminService, *fakeUserStore, *fakeTokenStore, 
 	users := newFakeUserStore()
 	tokens := newFakeTokenStore()
 	oauth := &fakeOAuthIdentityStore{}
-	return NewUserAdminService(users, tokens, oauth, "admin1"), users, tokens, oauth
+	return NewUserAdminService(users, tokens, oauth), users, tokens, oauth
 }
 
 func TestUserAdminCreate(t *testing.T) {
@@ -596,8 +605,8 @@ func TestUserAdminCreate(t *testing.T) {
 }
 
 func TestUserAdminInitialAdminGuards(t *testing.T) {
-	svc, users, _, _ := newUserAdminService() // 测试夹具中 admin1 即初始管理员
-	initial := users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
+	svc, users, _, _ := newUserAdminService()
+	initial := users.addBootstrapUser("admin1", "pw-123456") // 引导创建的初始管理员
 	users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
 	ctx := context.Background()
 
@@ -658,7 +667,7 @@ func TestUserAdminDisableRevokesTokens(t *testing.T) {
 }
 
 func TestUserAdminLastAdminGuards(t *testing.T) {
-	svc, users, _, _ := newUserAdminService() // admin1 是初始管理员，这里用非初始账号验证最后 admin 守卫
+	svc, users, _, _ := newUserAdminService() // 用非初始账号验证最后 admin 守卫
 	admin := users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
 
 	if _, err := svc.Update(context.Background(), admin.ID, strPtr("editor"), nil); !errors.Is(err, ErrLastAdmin) {
@@ -679,8 +688,8 @@ func TestUserAdminLastAdminGuards(t *testing.T) {
 }
 
 func TestUserAdminResetPassword(t *testing.T) {
-	svc, users, tokens, _ := newUserAdminService() // admin1 为初始管理员
-	initial := users.addUser("admin1", "pw-123456", model.RoleAdmin, true)
+	svc, users, tokens, _ := newUserAdminService()
+	initial := users.addBootstrapUser("admin1", "pw-123456") // 初始管理员（is_bootstrap）
 	otherAdmin := users.addUser("admin2", "pw-123456", model.RoleAdmin, true)
 	local := users.addUser("alice", "pw-123456", model.RoleViewer, true)
 	oauthUser := users.addUser("ou_x", "", model.RoleViewer, true) // 无本地密码

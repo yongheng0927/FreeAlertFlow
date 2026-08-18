@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,6 +23,7 @@ var (
 	ErrInvalidToken       = errors.New("invalid refresh token")
 	ErrTokenReuse         = errors.New("refresh token reuse detected, all sessions revoked")
 	ErrNoLocalPassword    = errors.New("password login not available for this account")
+	ErrSetupCompleted     = errors.New("setup already completed")
 )
 
 // UserStore 抽象用户的持久化
@@ -31,6 +33,12 @@ type UserStore interface {
 	// FindByID 在用户不存在时返回 (nil, nil)
 	FindByID(ctx context.Context, id int64) (*model.User, error)
 	Count(ctx context.Context) (int64, error)
+	// CountBootstrapAdmins 统计引导管理员（is_bootstrap = TRUE）的数量，
+	// 用于判定 setup 是否已完成（不能看用户总数：OAuth 自动建号可能先
+	// 创建普通用户）
+	CountBootstrapAdmins(ctx context.Context) (int64, error)
+	// FindBootstrap 返回引导管理员，不存在时返回 (nil, nil)
+	FindBootstrap(ctx context.Context) (*model.User, error)
 	// List 返回一页用户（按 id 升序）和总数
 	List(ctx context.Context, offset, limit int) ([]model.User, int64, error)
 	Create(ctx context.Context, u *model.User) error
@@ -184,23 +192,39 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPw, n
 	return s.tokens.RevokeAllForUser(ctx, userID)
 }
 
-// BootstrapAdmin 在数据库没有任何用户且配置了
-// FENGHUO_ADMIN_USER/FENGHUO_ADMIN_PASSWORD 时创建初始管理员，否则什么都不做
-// 返回是否创建了用户
-func (s *AuthService) BootstrapAdmin(ctx context.Context, username, pw string) (bool, error) {
-	if username == "" || pw == "" {
-		return false, nil
-	}
-	n, err := s.users.Count(ctx)
+// Initialized 报告 setup 是否已完成（引导管理员已存在）
+func (s *AuthService) Initialized(ctx context.Context) (bool, error) {
+	n, err := s.users.CountBootstrapAdmins(ctx)
 	if err != nil {
 		return false, err
 	}
-	if n > 0 {
-		return false, nil
+	return n > 0, nil
+}
+
+// Setup 首次启动引导：创建初始管理员并直接签发 token 对（FR-5.1）
+// 仅当尚不存在 is_bootstrap = TRUE 的用户时可用；并发 setup 依靠
+// users 表的部分唯一索引兜底，第二个请求撞 23505 后映射为 ErrSetupCompleted
+func (s *AuthService) Setup(ctx context.Context, username, pw string) (*TokenPair, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, validationErr("username is required")
+	}
+	if len(username) > 64 {
+		return nil, validationErr("username must be at most 64 characters")
+	}
+	if len(pw) < 8 {
+		return nil, validationErr("password must be at least 8 characters")
+	}
+	ok, err := s.Initialized(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return nil, ErrSetupCompleted
 	}
 	hash, err := password.Hash(pw)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	user := &model.User{
 		Username:     username,
@@ -208,16 +232,17 @@ func (s *AuthService) BootstrapAdmin(ctx context.Context, username, pw string) (
 		Name:         username,
 		Role:         model.RoleAdmin,
 		Enabled:      true,
+		IsBootstrap:  true,
 	}
 	if err := s.users.Create(ctx, user); err != nil {
-		// 多副本同时首启：另一个实例已抢先创建，视为未创建而非失败
+		// 并发 setup：另一个请求已抢先创建，视为已完成而非失败
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return false, nil
+			return nil, ErrSetupCompleted
 		}
-		return false, fmt.Errorf("create initial admin: %w", err)
+		return nil, fmt.Errorf("create bootstrap admin: %w", err)
 	}
-	return true, nil
+	return s.issue(ctx, user)
 }
 
 // IssueTokens 为已完成认证的用户签发新 token 对（OAuth 流程在身份解析

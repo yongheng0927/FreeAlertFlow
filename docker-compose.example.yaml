@@ -22,9 +22,6 @@ services:
       FENGHUO_DATABASE_DBNAME: "fenghuo"
       FENGHUO_DATABASE_SSLMODE: "disable"
       FENGHUO_JWT_SECRET: "${FENGHUO_JWT_SECRET:-fenghuo-dev-jwt-secret-change-me}"
-      # 首次启动自动创建的初始管理员（FR-5.1），生产环境务必覆盖
-      FENGHUO_ADMIN_USER: "${FENGHUO_ADMIN_USER:-admin}"
-      FENGHUO_ADMIN_PASSWORD: "${FENGHUO_ADMIN_PASSWORD:-admin123456}"
       FENGHUO_LOG_LEVEL: "info"
       # 告警与投递记录保留天数，到期物理清理；0 或负数关闭自动清理
       FENGHUO_ALERT_RETENTION_DAYS: "30"
