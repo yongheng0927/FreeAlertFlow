@@ -1,0 +1,28 @@
+Fenghuo（烽火台）已部署到命名空间 {{ .Release.Namespace }}。
+
+1. 查看 Pod 状态：
+   kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+2. 本地访问（端口转发）：
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "fenghuo.fullname" . }} 8080:8080
+   然后打开 http://localhost:8080
+
+3. 初始管理员：首次打开 Web 界面按引导设置管理员账号（setup 完成后该接口自动关闭）
+
+{{- if .Values.secrets.existingSecret }}
+4. 密钥来源：外部 Secret {{ .Values.secrets.existingSecret }}
+   请确认它包含 key：jwt-secret / database-password
+{{- else }}
+4. 密钥来源：chart 生成的 Secret {{ include "fenghuo.secretName" . }}
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+5. Ingress 已启用：
+   将 {{ .Values.ingress.host }} 解析到入口地址后访问 http://{{ .Values.ingress.host }}
+   注意：请同时把 rootUrl 设置为 http://{{ .Values.ingress.host }}/（--set rootUrl=...）
+{{- else }}
+5. 如需通过 Ingress 暴露（Higress）：
+   helm upgrade {{ .Release.Name }} . -n {{ .Release.Namespace }} \
+     --set ingress.enabled=true --set ingress.host=fenghuo.local \
+     --set rootUrl=http://fenghuo.local/
+{{- end }}

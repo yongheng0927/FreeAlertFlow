@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fenghuo.fullname" . }}
+  labels:
+    {{- include "fenghuo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fenghuo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fenghuo.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: fenghuo
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: FENGHUO_SERVER_HTTP_ADDR
+              value: ":8080"
+            - name: FENGHUO_SERVER_ROOT_URL
+              value: {{ .Values.rootUrl | quote }}
+            - name: FENGHUO_DATABASE_HOST
+              value: {{ required "database.host 必填：chart 不再内置 PostgreSQL，请提供外部数据库地址" .Values.database.host | quote }}
+            - name: FENGHUO_DATABASE_PORT
+              value: {{ .Values.database.port | quote }}
+            - name: FENGHUO_DATABASE_USER
+              value: {{ .Values.database.user | quote }}
+            - name: FENGHUO_DATABASE_DBNAME
+              value: {{ .Values.database.dbname | quote }}
+            - name: FENGHUO_DATABASE_SSLMODE
+              value: {{ .Values.database.sslmode | quote }}
+            - name: FENGHUO_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fenghuo.secretName" . }}
+                  key: database-password
+            - name: FENGHUO_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fenghuo.secretName" . }}
+                  key: jwt-secret
+            - name: FENGHUO_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: FENGHUO_ALERT_DEDUP_WINDOW
+              value: {{ .Values.alert.dedupWindow | quote }}
+            - name: FENGHUO_ALERT_RETENTION_DAYS
+              value: {{ .Values.alert.retentionDays | quote }}
+            - name: FENGHUO_CHANNEL_HTTP_TIMEOUT
+              value: {{ .Values.channel.httpTimeout | quote }}
+            - name: FENGHUO_CHANNEL_RETRY_MAX
+              value: {{ .Values.channel.retryMax | quote }}
+          livenessProbe:
+            httpGet:
+              # 子路径部署（rootUrl 带路径前缀）时探针也要带同样的前缀
+              path: {{ include "fenghuo.basePath" . }}/healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: {{ include "fenghuo.basePath" . }}/readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

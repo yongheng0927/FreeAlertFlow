@@ -21,9 +21,6 @@ config.yaml
 # 本地临时工具与冒烟测试产物
 .tools/
 
-# helm
-deploy/
-
 # 本地部署配置（模板见 docker-compose.example.yaml）
 /docker-compose.yaml
 

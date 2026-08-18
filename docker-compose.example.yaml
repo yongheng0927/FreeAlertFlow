@@ -15,6 +15,9 @@ services:
       FENGHUO_SERVER_HTTP_ADDR: ":8080"
       # 外部访问地址，反向代理/子路径部署时改成实际地址（FR-6）
       FENGHUO_SERVER_ROOT_URL: "http://localhost:8080/"
+      # 部署在反向代理之后时，设置可信代理 IP/CIDR（逗号分隔）
+      # 不设置则忽略 X-Forwarded-For，登录限流按直连对端 IP 计数
+      # FENGHUO_SERVER_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12"
       FENGHUO_DATABASE_HOST: "db"
       FENGHUO_DATABASE_PORT: "5432"
       FENGHUO_DATABASE_USER: "fenghuo"
@@ -37,6 +40,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # 探针路径自动从 ROOT_URL 提取路径前缀，子路径部署无需改这里
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          u=$${FENGHUO_SERVER_ROOT_URL:-http://localhost:8080/}; u=$${u%/}/;
+          r=$${u#*://}; p=/$${r#*/};
+          wget -qO- "http://127.0.0.1:8080$${p%/}/healthz" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 6
 
   db:
     image: postgres:18-alpine
