@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Layout, Menu, Dropdown, Avatar, Tag, Typography, message, theme } from 'antd'
 import {
   AlertOutlined,
@@ -15,7 +15,7 @@ import {
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
-import { runtimeConfig } from '../config'
+import { assetUrl, runtimeConfig } from '../config'
 import { useAuth } from '../auth/useAuth'
 
 const { Sider, Header, Content } = Layout
@@ -30,6 +30,8 @@ export default function AppLayout() {
   const { user, canWrite, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  // 侧栏折叠态（图标模式）：折叠时顶部只显示项目图标，不显示名称
+  const [collapsed, setCollapsed] = useState(false)
   const {
     token: { colorBgContainer },
   } = theme.useToken()
@@ -75,7 +77,7 @@ export default function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="dark" width={208} breakpoint="lg" collapsible>
+      <Sider theme="dark" width={208} breakpoint="lg" collapsible collapsed={collapsed} onCollapse={setCollapsed}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div
             style={{
@@ -90,8 +92,8 @@ export default function AppLayout() {
               letterSpacing: 0.5,
             }}
           >
-            <img src="/logo.svg" alt="烽火台" style={{ width: 28, height: 28 }} />
-            烽火台
+            <img src={assetUrl('logo.svg')} alt="烽火台" style={{ width: 28, height: 28 }} />
+            {!collapsed && <span>烽火台</span>}
           </div>
           <Menu
             theme="dark"

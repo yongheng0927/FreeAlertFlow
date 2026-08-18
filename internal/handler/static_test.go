@@ -21,7 +21,7 @@ func testConfig(rootURL string) *config.Config {
 
 func testDist() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":    &fstest.MapFile{Data: []byte(`<html><head><title>t</title><script src="./assets/app.js"></script></head><body>spa</body></html>`)},
+		"index.html":    &fstest.MapFile{Data: []byte(`<html><head><title>t</title><link rel="icon" href="./logo.svg" /><script src="./assets/app.js"></script></head><body>spa</body></html>`)},
 		"assets/app.js": &fstest.MapFile{Data: []byte("console.log(1)")},
 		"favicon.ico":   &fstest.MapFile{Data: []byte("ico")},
 	}
@@ -66,10 +66,17 @@ func TestStaticRewritesRelativeAssets(t *testing.T) {
 	if !strings.Contains(string(h.indexBytes), `src="/freealertflow/assets/app.js"`) {
 		t.Errorf("assets must be rewritten under base: %s", h.indexBytes)
 	}
+	// dist 根下的相对资源（favicon 等）同样要改写，否则子路径部署下 404
+	if !strings.Contains(string(h.indexBytes), `href="/freealertflow/logo.svg"`) {
+		t.Errorf("logo.svg must be rewritten under base: %s", h.indexBytes)
+	}
 	// 根路径部署：改写为 /assets/*
 	h = newStatic(t, "http://localhost:8080/", testDist())
 	if !strings.Contains(string(h.indexBytes), `src="/assets/app.js"`) {
 		t.Errorf("assets must be rewritten to root: %s", h.indexBytes)
+	}
+	if !strings.Contains(string(h.indexBytes), `href="/logo.svg"`) {
+		t.Errorf("logo.svg must be rewritten to root: %s", h.indexBytes)
 	}
 }
 

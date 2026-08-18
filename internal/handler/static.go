@@ -45,11 +45,12 @@ func NewStaticHandler(cfg *config.Config, dist fs.FS) (*StaticHandler, error) {
 	if !bytes.Contains(index, injection) {
 		index = append(injection, raw...) // 没有 </head> 时改为插到开头
 	}
-	// vite 产物中的资源引用是相对路径（"./assets/*"）：深链接（如
+	// vite 产物中的资源引用是相对路径（"./assets/*"、"./logo.svg"）：深链接（如
 	// /base/oauth/callback）直接打开时浏览器会把它解析成 /base/oauth/assets/*
 	// 而 404 白屏，统一改写为 base 下的绝对路径
 	base := cfg.BasePath()
 	index = bytes.ReplaceAll(index, []byte(`"./assets/`), []byte(`"`+base+`/assets/`))
+	index = bytes.ReplaceAll(index, []byte(`"./logo.svg`), []byte(`"`+base+`/logo.svg`))
 	return &StaticHandler{dist: dist, base: base, indexBytes: index}, nil
 }
 

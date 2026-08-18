@@ -38,6 +38,11 @@ export const runtimeConfig = {
 /** 所有 API 请求的基础 URL（相对路径，可配合开发代理使用） */
 export const apiBase = `${runtimeConfig.base}api`.replace(/\/{2,}/g, '/')
 
+/** dist 根下静态资源（如 logo.svg）的 URL，考虑子路径部署（base 已保证以 '/' 结尾） */
+export function assetUrl(name: string): string {
+  return `${runtimeConfig.base}${name}`.replace(/\/{2,}/g, '/')
+}
+
 /** 拼接 Webhook 地址用的公网根 URL：优先用后端配置的 rootUrl，未配置时退回当前页面 origin */
 export function publicRootUrl(): string {
   if (runtimeConfig.rootUrl) return runtimeConfig.rootUrl.replace(/\/+$/, '')
