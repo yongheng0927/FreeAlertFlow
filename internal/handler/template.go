@@ -169,13 +169,14 @@ func (h *TemplateHandler) Preview(c *gin.Context) {
 	if channelType == "" {
 		channelType = model.ChannelTypeFeishu
 	}
-	rendered, err := h.svc.Preview(c.Request.Context(), content, channelType, req.Alert)
+	preview, err := h.svc.Preview(c.Request.Context(), content, channelType, req.Alert)
 	if err != nil {
 		serviceError(c, err)
 		return
 	}
-	// 与前端约定的契约：rendered 是渲染出的渠道消息体 JSON 字符串
-	c.JSON(http.StatusOK, gin.H{"rendered": rendered})
+	// 与前端约定的契约：rendered 是渲染出的渠道消息体 JSON 字符串，
+	// source 表示实际使用的告警数据来源（request/latest_alert/sample）
+	c.JSON(http.StatusOK, gin.H{"rendered": preview.Rendered, "source": preview.Source})
 }
 
 type templateTestSendRequest struct {

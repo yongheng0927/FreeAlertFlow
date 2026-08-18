@@ -217,12 +217,15 @@ func (s *ChannelService) Delete(ctx context.Context, id int64) error {
 }
 
 // TestSendResult 是测试发送的结果（FR-2.5）
+// Source 在模板测试发送时标识渲染用的告警来源（request/latest_alert/sample），
+// 渠道测试发送时为空。
 type TestSendResult struct {
 	Success    bool   `json:"success"`
 	HTTPStatus int    `json:"http_status"`
 	Code       int    `json:"code"`
 	Msg        string `json:"msg"`
 	DurationMS int64  `json:"duration_ms"`
+	Source     string `json:"source,omitempty"`
 }
 
 // TestSend 立即通过渠道发送一条测试消息，验证 URL + 签名是否正确

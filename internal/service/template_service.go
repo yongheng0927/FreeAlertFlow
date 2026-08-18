@@ -163,35 +163,58 @@ const samplePayload = `{
   ]
 }`
 
+// PreviewSource 表示模板预览/测试发送时使用的告警数据来源
+const (
+	PreviewSourceRequest    = "request"     // 调用方显式传入的 alert JSON
+	PreviewSourceLatestAlert = "latest_alert" // 数据库最近一条入库告警
+	PreviewSourceSample     = "sample"      // 内置兜底样例
+)
+
+// PreviewResult 是模板预览的渲染结果，附带实际使用的告警数据来源
+// （方便前端告诉用户当前看到的是「真实告警」还是「样例」）
+type PreviewResult struct {
+	Rendered string
+	Source   string
+}
+
 // Preview 用告警负载渲染模板（content 或 template_id）：优先用调用方提供
 // 的 JSON，否则用最近一条入库告警，最后用内置样例（FR-2.3 在线预览）
 // channelType 决定按哪家渠道校验渲染结果；返回渲染出的消息体 JSON 字符串
-func (s *TemplateService) Preview(ctx context.Context, content, channelType string, alertJSON []byte) (string, error) {
+func (s *TemplateService) Preview(ctx context.Context, content, channelType string, alertJSON []byte) (PreviewResult, error) {
 	if content == "" {
-		return "", validationErr("content is required")
+		return PreviewResult{}, validationErr("content is required")
 	}
 	switch channelType {
 	case model.ChannelTypeFeishu, model.ChannelTypeDingTalk, model.ChannelTypeWeCom:
 	default:
-		return "", validationErr("channel_type must be feishu, dingtalk or wecom")
+		return PreviewResult{}, validationErr("channel_type must be feishu, dingtalk or wecom")
 	}
+
+	source := PreviewSourceRequest
 	payload := alertJSON
 	if len(payload) == 0 {
+		source = PreviewSourceLatestAlert
 		latest, err := s.alerts.LatestRawPayload(ctx)
 		if err != nil {
-			return "", err
+			return PreviewResult{}, err
 		}
 		payload = latest
 	}
 	if len(payload) == 0 {
+		source = PreviewSourceSample
 		payload = []byte(samplePayload)
 	}
+
 	msg, err := ParseAMWebhook(payload)
 	if err != nil {
-		return "", err
+		return PreviewResult{}, err
 	}
 	rctx := buildRenderContext(msg, "模板预览", s.rootURL)
-	return s.engine.Render(content, rctx, channelType)
+	rendered, err := s.engine.Render(content, rctx, channelType)
+	if err != nil {
+		return PreviewResult{}, err
+	}
+	return PreviewResult{Rendered: rendered, Source: source}, nil
 }
 
 // TestSend 把模板渲染结果真实投递到指定渠道（对标 FR-2.5 的渠道测试）：
@@ -209,21 +232,22 @@ func (s *TemplateService) TestSend(ctx context.Context, content, channelType str
 	if ch.Type != channelType {
 		return nil, validationErr("channel %d is %s, but the template renders for %s", channelID, ch.Type, channelType)
 	}
-	rendered, err := s.Preview(ctx, content, channelType, alertJSON)
+	preview, err := s.Preview(ctx, content, channelType, alertJSON)
 	if err != nil {
 		return nil, err
 	}
 	// 关键词预检与投递流水线一致（deliver.go）：本地给出比渠道报错更清晰的提示
-	if ch.Keyword != "" && !strings.Contains(rendered, ch.Keyword) {
+	if ch.Keyword != "" && !strings.Contains(preview.Rendered, ch.Keyword) {
 		return nil, validationErr("rendered message does not contain the required keyword %q", ch.Keyword)
 	}
 	start := time.Now()
-	res := s.sender.Send(ctx, ch, []byte(rendered))
+	res := s.sender.Send(ctx, ch, []byte(preview.Rendered))
 	return &TestSendResult{
 		Success:    res.Success(),
 		HTTPStatus: res.HTTPStatus,
 		Code:       res.Code,
 		Msg:        res.Message(),
 		DurationMS: time.Since(start).Milliseconds(),
+		Source:     preview.Source,
 	}, nil
 }

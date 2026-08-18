@@ -45,15 +45,22 @@ import { errorMessage } from '../api/client'
 import type { Channel, Template, TemplatePreview, TestSendResult } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { CardPreview } from '../components/CardPreview'
+import { JsonView } from '../components/JsonView'
 import { formatTime } from '../utils'
 
-/** 格式化 JSON 字符串，失败时保留原文 */
-function prettyJson(s: string): string {
+/** 解析 JSON 字符串，失败时按原字符串返回（JsonView 会按字符串展示） */
+function safeParse(s: string): unknown {
   try {
-    return JSON.stringify(JSON.parse(s), null, 2)
+    return JSON.parse(s)
   } catch {
     return s
   }
+}
+
+const PREVIEW_SOURCE_LABEL: Record<TemplatePreview['source'], string> = {
+  request: '请求传入的告警',
+  latest_alert: '最近一条真实告警',
+  sample: '内置样例告警',
 }
 
 /** 各渠道类型的 payload 结构说明与小示例 */
@@ -575,13 +582,18 @@ export default function TemplatesPage() {
                     </div>
                   </>
                 )}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  消息体 JSON
-                  {editor.channelType !== 'feishu' && '（以实际发送为准）'}
-                </Typography.Text>
-                <pre className="json-view" style={{ marginTop: 8 }}>
-                  {prettyJson(preview.rendered)}
-                </pre>
+                <Space size={8}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    消息体 JSON
+                    {editor.channelType !== 'feishu' && '（以实际发送为准）'}
+                  </Typography.Text>
+                  <Tag color="default" style={{ fontSize: 11, lineHeight: '16px' }}>
+                    基于 {PREVIEW_SOURCE_LABEL[preview.source]}
+                  </Tag>
+                </Space>
+                <div style={{ marginTop: 8 }}>
+                  <JsonView data={safeParse(preview.rendered)} />
+                </div>
               </>
             )}
           </Col>
@@ -602,7 +614,9 @@ export default function TemplatesPage() {
           }}
         >
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-            用当前编辑器中的模板内容渲染样例告警，真实投递到所选渠道（不会写入投递记录）。
+            用当前编辑器中的模板内容渲染告警并真实投递到所选渠道（不会写入投递记录）。
+            <br />
+            渲染数据来源：优先使用最近一条真实告警，没有告警时使用内置样例。
           </Typography.Paragraph>
           {testChannels.length === 0 ? (
             <Alert
@@ -626,9 +640,13 @@ export default function TemplatesPage() {
               showIcon
               message={testResult.success ? `发送成功，耗时 ${testResult.duration_ms} ms` : '发送失败'}
               description={
-                testResult.success
-                  ? undefined
-                  : `HTTP ${testResult.http_status}，code=${testResult.code}，${testResult.msg || '-'}`
+                <>
+                  {testResult.success && testResult.source && (
+                    <div>渲染数据源：{PREVIEW_SOURCE_LABEL[testResult.source]}</div>
+                  )}
+                  {!testResult.success &&
+                    `HTTP ${testResult.http_status}，code=${testResult.code}，${testResult.msg || '-'}`}
+                </>
               }
             />
           )}
@@ -681,9 +699,9 @@ export default function TemplatesPage() {
               <Card
                 size="small"
                 hoverable
-                style={{ borderStyle: 'dashed' }}
+                style={{ borderStyle: 'dashed', height: '100%' }}
                 styles={{
-                  body: { height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+                  body: { height: '100%', minHeight: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' },
                 }}
                 onClick={openNew}
               >
