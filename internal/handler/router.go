@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
@@ -50,6 +52,13 @@ type Deps struct {
 // 角色矩阵按 FR-5.4：GET 接口 viewer 起，写操作 editor 起，用户管理仅 admin
 func NewRouter(d *Deps) *gin.Engine {
 	r := gin.New()
+	// 可信代理：未配置时不信任任何代理头（ClientIP 取直连对端），防止
+	// 伪造 X-Forwarded-For 绕过按 IP 的登录限流（NFR-1）；配置非法时
+	// 退化为不信任并告警
+	if err := r.SetTrustedProxies(d.Config.Server.TrustedProxies); err != nil {
+		slog.Warn("invalid server.trusted_proxies, trusting no proxies", "error", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 	r.Use(middleware.AccessLog(), gin.Recovery())
 
 	// 所有路由挂在 base path 下（无子路径部署时为空串）

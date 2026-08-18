@@ -86,3 +86,31 @@ func TestAccessLogServerErrorLevel(t *testing.T) {
 		t.Errorf("5xx must be logged at error level, got: %s", out)
 	}
 }
+
+func TestAccessLogMasksWebhookToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	read := captureSlog(t, slog.LevelInfo)
+
+	r := gin.New()
+	r.Use(AccessLog())
+	ok := func(c *gin.Context) { c.Status(http.StatusOK) }
+	r.POST("/api/v1/alerts/webhook/:token", ok)
+	// 带 base path 前缀的 webhook 同样应脱敏
+	r.POST("/fenghuo/api/v1/alerts/webhook/:token", ok)
+
+	for _, p := range []string{
+		"/api/v1/alerts/webhook/s3cr3t-token",
+		"/fenghuo/api/v1/alerts/webhook/s3cr3t-token",
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, p, nil))
+	}
+
+	out := read()
+	if strings.Contains(out, "s3cr3t-token") {
+		t.Errorf("webhook token must be masked in access log, got: %s", out)
+	}
+	if !strings.Contains(out, "/api/v1/alerts/webhook/***") {
+		t.Errorf("masked webhook path must be logged, got: %s", out)
+	}
+}

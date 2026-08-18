@@ -153,6 +153,12 @@ func run() error {
 	srv := &http.Server{
 		Addr:    cfg.Server.HTTPAddr,
 		Handler: router,
+		// 防慢连接（slowloris）耗尽：限制请求头/请求体读取与写回的总时长；
+		// 上限对齐 webhook 1MiB body 和前端静态资源在内网的正常传输耗时
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	go func() {
 		slog.Info("http server listening", "addr", cfg.Server.HTTPAddr)

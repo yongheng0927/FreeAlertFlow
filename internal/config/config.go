@@ -33,6 +33,11 @@ type Config struct {
 type ServerConfig struct {
 	HTTPAddr string
 	RootURL  string
+	// TrustedProxies 是可信反向代理的 IP/CIDR 列表；为空表示不信任任何
+	// 代理（忽略 X-Forwarded-For 等头，ClientIP 取直连对端），防止客户端
+	// 伪造 XFF 绕过按 IP 的登录限流。部署在反向代理之后时应配置为代理的
+	// IP 或网段
+	TrustedProxies []string
 }
 
 type DatabaseConfig struct {
@@ -118,8 +123,9 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		Server: ServerConfig{
-			HTTPAddr: v.GetString("server.http_addr"),
-			RootURL:  v.GetString("server.root_url"),
+			HTTPAddr:       v.GetString("server.http_addr"),
+			RootURL:        v.GetString("server.root_url"),
+			TrustedProxies: v.GetStringSlice("server.trusted_proxies"),
 		},
 		Database: DatabaseConfig{
 			Host:     v.GetString("database.host"),

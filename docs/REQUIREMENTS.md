@@ -215,6 +215,7 @@ FENGHUO_SERVER_HTTP_ADDR=0.0.0.0:8080                       # 监听地址
 |---|---|---|
 | `FENGHUO_SERVER_HTTP_ADDR` | `:8080` | 监听地址 |
 | `FENGHUO_SERVER_ROOT_URL` | `http://localhost:8080/` | 外部访问根地址 |
+| `FENGHUO_SERVER_TRUSTED_PROXIES` | —（不信任任何代理头） | 可信反向代理 IP/CIDR，逗号分隔；部署在反代之后时必须配置，否则按 IP 的登录限流可被伪造 XFF 绕过（NFR-1） |
 | `FENGHUO_DATABASE_HOST` / `FENGHUO_DATABASE_PORT` | `localhost` / `5432` | PostgreSQL 地址 |
 | `FENGHUO_DATABASE_USER` / `FENGHUO_DATABASE_PASSWORD` / `FENGHUO_DATABASE_DBNAME` | — | PostgreSQL 账号、密码、库名（user/dbname 必填） |
 | `FENGHUO_DATABASE_SSLMODE` | `disable` | PostgreSQL SSL 模式 |
