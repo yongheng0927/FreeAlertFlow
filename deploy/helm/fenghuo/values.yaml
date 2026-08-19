@@ -6,29 +6,41 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
-replicaCount: 1
+# 私有镜像仓库拉取凭证；Secret 须与应用部署在同一 namespace
+imagePullSecrets: []
+#  - name: harbor-pull-secret
+
+replicaCount: 2
 
 # 外部访问地址（FR-6），反向代理/子路径部署时改成实际地址
 rootUrl: "http://localhost:8080/"
 
-# 外部 PostgreSQL（必填，chart 不再内置数据库）
+# 外部 PostgreSQL（chart 不内置数据库）
+# 密码不在此处配置，统一由下方 secrets.existingSecret 指向的 Secret 提供
 database:
-  host: ""        # 必填：外部 PostgreSQL 地址，留空时安装直接报错
+  host: ""                   # 必填：外部 PostgreSQL 地址，留空时安装直接报错
   port: 5432
-  user: fenghuo
-  # 数据库密码。secrets.existingSecret 为空时必填，由 chart 写入生成的 Secret
-  password: ""
-  dbname: fenghuo
+  user: ""
+  dbname: ""
   sslmode: disable
 
-# 密钥管理：FENGHUO_JWT_SECRET / 数据库密码
-# 两种方式二选一：
-#   1. existingSecret 指向预先创建好的 Secret，须包含 key：
-#      jwt-secret / database-password
-#   2. existingSecret 留空，由 chart 用下面的值生成 Secret（两者均必填）
+# 密钥管理：所有敏感信息只通过外部 Secret 提供，不经过 values
+# existingSecret 指向预先创建好的 Secret，须包含以下 key：
+#   - jwt-secret        （必需）
+#   - database-password （必需）
+#   - feishu-app-secret （仅 oauth.enabled=true 时必需）
+# 创建示例见 README.md「密钥管理」一节
 secrets:
-  existingSecret: ""
-  jwtSecret: ""
+  existingSecret: ""         # 必填：Secret 名称，留空时安装直接报错
+
+# 飞书 OAuth 登录
+oauth:
+  enabled: false
+  feishuAppId: ""            # 飞书开放平台应用的 App ID（cli_ 开头）
+  # 留空表示不限制邮箱；配置多个邮箱时逐项填写
+  allowedEmails: []
+  # 首次通过飞书登录时自动创建本地用户
+  autoCreateUser: true
 
 logLevel: info
 
@@ -48,7 +60,9 @@ ingress:
   enabled: false
   className: higress
   host: fenghuo.local
-  # 开启 ingress 后建议把 rootUrl 改为 http://<host>/
+  path: /
+  pathType: Prefix
+  # rootUrl 的 scheme、host 和 path 必须与外部访问地址一致
 
 resources: {}
   # limits:

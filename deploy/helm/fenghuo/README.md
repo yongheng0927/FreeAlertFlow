@@ -22,11 +22,30 @@ docker save fenghuo:latest -o fenghuo.tar
 sudo ctr -n k8s.io images import fenghuo.tar
 ```
 
-## 2. 密钥管理（两种方式二选一）
+如果直接从需要认证的私有镜像仓库拉取，先在应用 namespace 创建拉取凭证：
 
-应用需要两个密钥：`FENGHUO_JWT_SECRET`、数据库密码。
+```bash
+kubectl create secret docker-registry harbor-pull-secret -n fenghuo \
+  --docker-server=harbor.example.com \
+  --docker-username=<用户名> \
+  --docker-password=<密码>
+```
 
-### 方式 A：引用已有 Secret（推荐生产使用）
+然后在 values 中引用：
+
+```yaml
+imagePullSecrets:
+  - name: harbor-pull-secret
+```
+
+## 2. 密钥管理
+
+应用必需的密钥：`FENGHUO_JWT_SECRET`、数据库密码；开启飞书 OAuth 登录时还需要
+飞书 App Secret。
+
+所有敏感信息只通过外部 Secret 提供，不经过 values——chart 不会生成 Secret，
+values 里也没有任何可填密码的字段，可以避免明文落入 Helm release 历史或
+误提交进 git。
 
 预先创建 Secret，key 名约定如下：
 
@@ -34,9 +53,11 @@ sudo ctr -n k8s.io images import fenghuo.tar
 kubectl create secret generic fenghuo-secrets -n fenghuo \
   --from-literal=jwt-secret=<随机串> \
   --from-literal=database-password=<数据库密码>
+# 开启飞书 OAuth 时追加：
+#   --from-literal=feishu-app-secret=<飞书 App Secret>
 ```
 
-安装时引用它（此时 `secrets.jwtSecret` / `database.password` 无需设置）：
+安装时通过 `secrets.existingSecret` 引用它（必填，留空时 helm 直接报错）：
 
 ```bash
 helm install fenghuo ./deploy/helm/fenghuo \
@@ -45,18 +66,8 @@ helm install fenghuo ./deploy/helm/fenghuo \
   --set secrets.existingSecret=fenghuo-secrets
 ```
 
-### 方式 B：由 chart 生成 Secret
-
-```bash
-helm install fenghuo ./deploy/helm/fenghuo \
-  -n fenghuo --create-namespace \
-  --set database.host=<数据库地址> \
-  --set database.password=<数据库密码> \
-  --set secrets.jwtSecret=<随机串>
-```
-
-> `database.host` 为必填；方式 B 下 `secrets.jwtSecret` / `database.password`
-> 均必填，未提供时 helm 会直接报错。chart 不提供默认弱密钥。
+> `database.host` 和 `secrets.existingSecret` 均为必填，未提供时 helm 会直接报错。
+> chart 不提供默认弱密钥。
 
 ## 3. 验证
 
@@ -77,8 +88,43 @@ helm upgrade fenghuo ./deploy/helm/fenghuo -n fenghuo \
   --set database.host=<数据库地址> \
   --set secrets.existingSecret=fenghuo-secrets \
   --set ingress.enabled=true --set ingress.host=fenghuo.local \
-  --set rootUrl=http://fenghuo.local/
+  --set ingress.path=/fenghuo \
+  --set rootUrl=http://fenghuo.local/fenghuo/
 ```
+
+### 飞书 OAuth 登录
+
+应用使用以下环境变量启用飞书登录：
+
+- `FENGHUO_OAUTH_ENABLED`
+- `FENGHUO_OAUTH_FEISHU_APP_ID`
+- `FENGHUO_OAUTH_FEISHU_APP_SECRET`
+- `FENGHUO_OAUTH_ALLOWED_EMAILS`（逗号分隔的邮箱白名单，留空不限制）
+- `FENGHUO_OAUTH_AUTO_CREATE_USER`（首次登录自动创建本地用户）
+
+为 Secret 增加 `feishu-app-secret` key，然后配置：
+
+```yaml
+oauth:
+  enabled: true
+  feishuAppId: "cli_xxxxxxxxxxxxx"
+  allowedEmails:
+    - user1@example.com
+    - user2@example.com
+  autoCreateUser: true
+
+secrets:
+  existingSecret: fenghuo-secrets
+```
+
+飞书开放平台的重定向 URL 为：
+
+```text
+<rootUrl>api/auth/oauth/feishu/callback
+```
+
+例如 `rootUrl` 为 `https://example.com/fenghuo/` 时，重定向 URL 是
+`https://example.com/fenghuo/api/auth/oauth/feishu/callback`。
 
 ### 多副本
 
@@ -90,19 +136,33 @@ helm upgrade fenghuo ./deploy/helm/fenghuo -n fenghuo \
 ```yaml
 database:
   host: "postgres.example.internal"
-  password: "s3cret"
 secrets:
-  jwtSecret: "change-me"
+  existingSecret: "fenghuo-secrets"
 ```
+
+### 常用 values 说明
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `image.repository` / `image.tag` | 应用镜像 | `fenghuo` / `latest` |
+| `imagePullSecrets` | 私有仓库拉取凭证列表 | `[]` |
+| `replicaCount` | 副本数（>1 需外部数据库，已满足） | `1` |
+| `rootUrl` | 外部访问地址，须以 `/` 结尾 | `http://localhost:8080/` |
+| `database.host` | 外部 PostgreSQL 地址（必填） | `""` |
+| `secrets.existingSecret` | 预先创建的应用 Secret 名称（必填） | `""` |
+| `oauth.enabled` | 飞书 OAuth 登录开关 | `false` |
+| `ingress.enabled` / `ingress.host` / `ingress.path` | Ingress 暴露 | `false` / `fenghuo.local` / `/` |
+| `alert.dedupWindow` / `alert.retentionDays` | 告警去重窗口 / 保留天数 | `5m` / `30` |
+| `resources` | 容器资源限制 | `{}` |
 
 ### 其他 values
 
-见 [values.yaml](./values.yaml)，所有应用配置与 `config.example.yaml` 中的 `FENGHUO_*`
+见 [values.yaml](./values.yaml)，所有应用配置与 `config.yaml` 中的 `FENGHUO_*`
 环境变量一一对应。
 
 ## 卸载
 
 ```bash
 helm uninstall fenghuo -n fenghuo
-# chart 不创建任何 PVC；方式 A 的外部 Secret 也不会被删除
+# chart 不创建任何 PVC；外部 Secret 由用户管理，卸载时不会被删除
 ```

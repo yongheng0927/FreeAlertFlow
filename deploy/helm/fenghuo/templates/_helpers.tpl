@@ -38,15 +38,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-应用 Secret 名称：优先使用用户提供的 existingSecret，
-否则使用 chart 生成的 <fullname>-secret
+应用 Secret 名称：必须指向预先创建好的 Secret，
+须包含 key：jwt-secret / database-password（开启飞书 OAuth 时还须 feishu-app-secret）
 */}}
 {{- define "fenghuo.secretName" -}}
-{{- if .Values.secrets.existingSecret }}
-{{- .Values.secrets.existingSecret }}
-{{- else }}
-{{- include "fenghuo.fullname" . }}-secret
-{{- end }}
+{{- required "secrets.existingSecret 必填：请预先创建包含 jwt-secret / database-password 的 Secret，并用 --set secrets.existingSecret=<名称> 引用" .Values.secrets.existingSecret -}}
 {{- end }}
 
 {{/*

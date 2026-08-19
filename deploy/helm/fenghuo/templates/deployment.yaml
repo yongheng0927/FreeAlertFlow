@@ -14,6 +14,10 @@ spec:
       labels:
         {{- include "fenghuo.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: fenghuo
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -46,6 +50,23 @@ spec:
                 secretKeyRef:
                   name: {{ include "fenghuo.secretName" . }}
                   key: jwt-secret
+            - name: FENGHUO_OAUTH_ENABLED
+              value: {{ .Values.oauth.enabled | quote }}
+            {{- if .Values.oauth.enabled }}
+            - name: FENGHUO_OAUTH_FEISHU_APP_ID
+              value: {{ required "oauth.feishuAppId 必填（开启飞书 OAuth 时）" .Values.oauth.feishuAppId | quote }}
+            - name: FENGHUO_OAUTH_FEISHU_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fenghuo.secretName" . }}
+                  key: feishu-app-secret
+            {{- with .Values.oauth.allowedEmails }}
+            - name: FENGHUO_OAUTH_ALLOWED_EMAILS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            - name: FENGHUO_OAUTH_AUTO_CREATE_USER
+              value: {{ .Values.oauth.autoCreateUser | quote }}
+            {{- end }}
             - name: FENGHUO_LOG_LEVEL
               value: {{ .Values.logLevel | quote }}
             - name: FENGHUO_ALERT_DEDUP_WINDOW

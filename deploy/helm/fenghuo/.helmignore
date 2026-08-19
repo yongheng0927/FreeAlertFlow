@@ -1,5 +1,12 @@
-# 打包 helm chart 时忽略的文件
-.git
-.gitignore
-README.md
+# Helm package 输出
 *.tgz
+
+# 本地或手工部署文件，不属于 Chart 模板
+/secret.yaml
+/ingress.yaml
+/values.yaml.bak
+
+# 编辑器和版本控制元数据
+.DS_Store
+.git/
+.gitignore
